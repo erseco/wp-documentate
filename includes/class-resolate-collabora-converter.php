@@ -45,7 +45,28 @@ class Resolate_Collabora_Converter {
 	 * @return bool
 	 */
 	public static function is_available() {
+		// Collabora works in WordPress Playground when using server-side proxy.
+		// No need to disable it completely.
 		return '' !== self::get_base_url();
+	}
+
+	/**
+	 * Detect if running in WordPress Playground environment.
+	 *
+	 * @return bool
+	 */
+	private static function is_wordpress_playground() {
+		// Check if we're running in WordPress Playground.
+		if ( isset( $_SERVER['HTTP_HOST'] ) && strpos( $_SERVER['HTTP_HOST'], 'playground.wordpress.net' ) !== false ) {
+			return true;
+		}
+
+		// Alternative check: Playground sets specific environment variables.
+		if ( defined( 'PLAYGROUND_SITE_URL' ) || getenv( 'PLAYGROUND_SITE_URL' ) ) {
+			return true;
+		}
+
+		return false;
 	}
 
 	/**
@@ -110,17 +131,31 @@ class Resolate_Collabora_Converter {
 			return new WP_Error( 'resolate_collabora_read_failed', __( 'No se pudo leer el fichero de entrada para la conversión.', 'resolate' ) );
 		}
 
-		$boundary = wp_generate_password( 24, false );
-		$eol      = "\r\n";
-		$body     = '';
-		$body    .= '--' . $boundary . $eol;
-		$body    .= 'Content-Disposition: form-data; name="data"; filename="' . $filename . '"' . $eol;
-		$body    .= 'Content-Type: ' . $mime . $eol . $eol;
-		$body    .= $file_body . $eol;
-		$body    .= '--' . $boundary . $eol;
-		$body    .= 'Content-Disposition: form-data; name="lang"' . $eol . $eol;
-		$body    .= $lang . $eol;
-		$body    .= '--' . $boundary . '--' . $eol;
+		// Generate a safe boundary using only alphanumeric characters and hyphens.
+		$boundary = '----ResolateBoundary' . bin2hex( random_bytes( 16 ) );
+		$crlf     = "\r\n";
+
+		// Build multipart body carefully to handle binary content correctly.
+		// We must avoid using implode() because the file content is binary.
+		$body = '';
+
+		// First part: file data.
+		$body .= '--' . $boundary . $crlf;
+		$body .= 'Content-Disposition: form-data; name="data"; filename="' . $filename . '"' . $crlf;
+		$body .= 'Content-Type: ' . $mime . $crlf;
+		$body .= $crlf;
+		$body .= $file_body;
+		$body .= $crlf;
+
+		// Second part: language parameter.
+		$body .= '--' . $boundary . $crlf;
+		$body .= 'Content-Disposition: form-data; name="lang"' . $crlf;
+		$body .= $crlf;
+		$body .= $lang;
+		$body .= $crlf;
+
+		// Final boundary.
+		$body .= '--' . $boundary . '--' . $crlf;
 
 		$args = array(
 			'timeout'   => apply_filters( 'resolate_collabora_timeout', 120 ),
@@ -132,30 +167,68 @@ class Resolate_Collabora_Converter {
 			'body'      => $body,
 		);
 
+		// Log the request for debugging (can be disabled in production).
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			error_log( 'Resolate Collabora: Sending request to ' . $endpoint );
+			error_log( 'Resolate Collabora: Boundary = ' . $boundary );
+			error_log( 'Resolate Collabora: File size = ' . strlen( $file_body ) . ' bytes' );
+		}
+
 		$response = wp_remote_post( $endpoint, $args );
 		if ( is_wp_error( $response ) ) {
+			$error_msg = $response->get_error_message();
+			$error_code = $response->get_error_code();
+
+			// Log detailed error information.
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				error_log( 'Resolate Collabora: Request failed - Code: ' . $error_code . ', Message: ' . $error_msg );
+			}
+
 			return new WP_Error(
 				'resolate_collabora_request_failed',
 				sprintf(
 					/* translators: %s: error message returned by wp_remote_post(). */
 					__( 'Error al conectar con Collabora Online: %s', 'resolate' ),
-					$response->get_error_message()
+					$error_msg
 				),
-				array( 'code' => $response->get_error_code() )
+				array(
+					'code' => $error_code,
+					'endpoint' => $endpoint,
+				)
 			);
 		}
 
 		$status = (int) wp_remote_retrieve_response_code( $response );
 		$body   = (string) wp_remote_retrieve_body( $response );
+
+		// Log response details for debugging.
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			error_log( 'Resolate Collabora: Response status = ' . $status );
+			if ( $status >= 400 ) {
+				error_log( 'Resolate Collabora: Response body = ' . substr( $body, 0, 500 ) );
+			}
+		}
+
 		if ( $status < 200 || $status >= 300 ) {
+			// Extract more meaningful error message from response body if available.
+			$error_detail = $body;
+			if ( strlen( $body ) > 200 ) {
+				$error_detail = substr( $body, 0, 200 ) . '...';
+			}
+
 			return new WP_Error(
 				'resolate_collabora_http_error',
 				sprintf(
-					/* translators: %d: HTTP status code returned by Collabora. */
-					__( 'Collabora Online devolvió el código HTTP %d durante la conversión.', 'resolate' ),
-					$status
+					/* translators: 1: HTTP status code, 2: error detail. */
+					__( 'Collabora Online devolvió el código HTTP %1$d: %2$s', 'resolate' ),
+					$status,
+					$error_detail
 				),
-				array( 'body' => $body )
+				array(
+					'status' => $status,
+					'body' => $body,
+					'endpoint' => $endpoint,
+				)
 			);
 		}
 
