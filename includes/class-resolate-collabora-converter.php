@@ -85,6 +85,29 @@ class Resolate_Collabora_Converter {
 			return new WP_Error( 'resolate_collabora_not_configured', __( 'Configura la URL del servicio Collabora Online para convertir documentos.', 'resolate' ) );
 		}
 
+		// Test basic connectivity to Collabora server.
+		$test_response = wp_remote_get(
+			$base_url,
+			array(
+				'timeout'   => 10,
+				'sslverify' => ! self::is_ssl_verification_disabled(),
+			)
+		);
+		if ( is_wp_error( $test_response ) ) {
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				error_log( 'Resolate Collabora: Cannot reach server at ' . $base_url . ' - ' . $test_response->get_error_message() );
+			}
+			return new WP_Error(
+				'resolate_collabora_unreachable',
+				sprintf(
+					/* translators: 1: server URL, 2: error message. */
+					__( 'No se puede conectar con el servidor Collabora en %1$s: %2$s. Esto puede ocurrir si estás en WordPress Playground que bloquea conexiones externas.', 'resolate' ),
+					$base_url,
+					$test_response->get_error_message()
+				)
+			);
+		}
+
 			$supported_formats = array( 'pdf', 'docx', 'odt' );
 		$output_format     = sanitize_key( $output_format );
 		if ( ! in_array( $output_format, $supported_formats, true ) ) {
@@ -114,28 +137,27 @@ class Resolate_Collabora_Converter {
 		$boundary = '----ResolateBoundary' . bin2hex( random_bytes( 16 ) );
 		$crlf     = "\r\n";
 
-		// Build multipart body with proper binary handling.
-		$body_parts = array();
+		// Build multipart body carefully to handle binary content correctly.
+		// We must avoid using implode() because the file content is binary.
+		$body = '';
 
 		// First part: file data.
-		$body_parts[] = '--' . $boundary;
-		$body_parts[] = 'Content-Disposition: form-data; name="data"; filename="' . $filename . '"';
-		$body_parts[] = 'Content-Type: ' . $mime;
-		$body_parts[] = '';
-		$body_parts[] = $file_body;
+		$body .= '--' . $boundary . $crlf;
+		$body .= 'Content-Disposition: form-data; name="data"; filename="' . $filename . '"' . $crlf;
+		$body .= 'Content-Type: ' . $mime . $crlf;
+		$body .= $crlf;
+		$body .= $file_body;
+		$body .= $crlf;
 
 		// Second part: language parameter.
-		$body_parts[] = '--' . $boundary;
-		$body_parts[] = 'Content-Disposition: form-data; name="lang"';
-		$body_parts[] = '';
-		$body_parts[] = $lang;
+		$body .= '--' . $boundary . $crlf;
+		$body .= 'Content-Disposition: form-data; name="lang"' . $crlf;
+		$body .= $crlf;
+		$body .= $lang;
+		$body .= $crlf;
 
 		// Final boundary.
-		$body_parts[] = '--' . $boundary . '--';
-		$body_parts[] = '';
-
-		// Join with CRLF, being careful with binary content.
-		$body = implode( $crlf, $body_parts );
+		$body .= '--' . $boundary . '--' . $crlf;
 
 		$args = array(
 			'timeout'   => apply_filters( 'resolate_collabora_timeout', 120 ),
