@@ -39,4 +39,21 @@ For development, you can bring up a local WordPress environment with the plugin 
 make up
 ```
 
-This command will start a Dockerized WordPress instance accessible at [http://localhost:8888](http://localhost:8080) with the default admin username `admin` and password `password`. 
+This command will start a Dockerized WordPress instance accessible at [http://localhost:8888](http://localhost:8080) with the default admin username `admin` and password `password`.
+
+### Testing
+
+The plugin includes a comprehensive PHPUnit test suite. To run the tests:
+
+```bash
+# Run all tests with Docker (recommended)
+make test
+
+# Run specific test file
+make test FILE=tests/unit/includes/ResolateTest.php
+
+# Run tests matching a pattern
+make test FILTER=test_document_generation
+```
+
+For detailed testing instructions including native setup without Docker, see [TESTING.md](TESTING.md). 

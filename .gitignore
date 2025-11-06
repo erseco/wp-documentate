@@ -42,6 +42,7 @@ sftp-config.json
 resolate/
 .aider*
 .env
+.env.testing
 
 wp/
 wp-content/
