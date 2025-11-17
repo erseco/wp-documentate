@@ -1,0 +1,79 @@
+/**
+ * Styles for readonly mode when document is published
+ */
+
+/* General disabled field styles */
+.documentate-readonly-mode .documentate-sections input[disabled],
+.documentate-readonly-mode .documentate-sections textarea[disabled],
+.documentate-readonly-mode .documentate-sections select[disabled],
+.documentate-readonly-mode #documentate_title_textarea[disabled],
+.documentate-readonly-mode #title[disabled] {
+  background-color: #f5f5f5 !important;
+  color: #666 !important;
+  cursor: not-allowed !important;
+  opacity: 0.7;
+}
+
+/* Disabled buttons */
+.documentate-readonly-mode .documentate-sections button[disabled],
+.documentate-readonly-mode .documentate-array-add[disabled],
+.documentate-readonly-mode .documentate-array-remove[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed !important;
+  pointer-events: none;
+}
+
+/* Published container styling */
+.documentate-sections.documentate-published {
+  opacity: 0.9;
+}
+
+/* Array field published styling */
+.documentate-array-field.documentate-published {
+  opacity: 0.9;
+}
+
+/* Hide drag handles in published mode */
+.documentate-readonly-mode .documentate-array-handle {
+  display: none !important;
+}
+
+/* Remove hover effects on disabled items */
+.documentate-readonly-mode .documentate-array-item {
+  cursor: default !important;
+}
+
+.documentate-readonly-mode .documentate-array-item:hover {
+  background-color: #fff !important;
+}
+
+/* Publish button styling */
+.documentate-readonly-mode #publish[disabled],
+.documentate-readonly-mode #save-post[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed !important;
+}
+
+/* Notice styling */
+.documentate-readonly-notice {
+  margin: 20px 0 10px;
+  padding: 12px;
+}
+
+.documentate-readonly-notice p {
+  margin: 0;
+  font-size: 14px;
+}
+
+/* TinyMCE readonly styling */
+.documentate-readonly-mode .mce-edit-area iframe {
+  opacity: 0.7;
+}
+
+/* Meta box fields */
+.documentate-readonly-mode #documentate_document_meta input[disabled] {
+  background-color: #f5f5f5 !important;
+  color: #666 !important;
+  cursor: not-allowed !important;
+  opacity: 0.7;
+}

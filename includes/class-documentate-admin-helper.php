@@ -103,6 +103,22 @@ class Documentate_Admin_Helper {
 
 		// Annexes repeater UI.
 		wp_enqueue_script( 'documentate-annexes', plugins_url( 'admin/js/documentate-annexes.js', DOCUMENTATE_PLUGIN_FILE ), array( 'jquery', 'wp-editor' ), DOCUMENTATE_VERSION, true );
+
+		// Readonly mode for published documents.
+		wp_enqueue_style( 'documentate-readonly', plugins_url( 'admin/css/documentate-readonly.css', DOCUMENTATE_PLUGIN_FILE ), array(), DOCUMENTATE_VERSION );
+		wp_enqueue_script( 'documentate-readonly', plugins_url( 'admin/js/documentate-readonly.js', DOCUMENTATE_PLUGIN_FILE ), array( 'jquery' ), DOCUMENTATE_VERSION, true );
+
+		// Pass post status to JavaScript.
+		global $post;
+		$is_published = ( $post && 'publish' === $post->post_status );
+		wp_localize_script(
+			'documentate-readonly',
+			'documentateReadOnly',
+			array(
+				'isPublished' => $is_published,
+				'message'     => __( 'Este documento está publicado y no se puede editar. Solo puedes descargarlo en los formatos disponibles.', 'documentate' ),
+			)
+		);
 	}
 
 	/**

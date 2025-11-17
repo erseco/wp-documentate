@@ -555,6 +555,10 @@ class Documentate_Documents {
 		$raw_fields = isset( $raw_schema['fields'] ) && is_array( $raw_schema['fields'] ) ? $raw_schema['fields'] : array();
 		// Load the raw schema so we can expose placeholders, constraints and help text.
 
+		// Check if document is published (read-only mode).
+		$is_published  = ( 'publish' === $post->post_status );
+		$disabled_attr = $is_published ? ' disabled="disabled"' : '';
+
 		if ( empty( $schema ) ) {
 			echo '<div class="documentate-sections">';
 			echo '<p class="description">' . esc_html__( 'Configura un tipo de documento con campos para poder editar su contenido.', 'documentate' ) . '</p>';
@@ -567,7 +571,11 @@ class Documentate_Documents {
 		$stored_fields   = $this->get_structured_field_values( $post->ID );
 		$known_meta_keys = array();
 
-		echo '<div class="documentate-sections">';
+		if ( $is_published ) {
+			echo '<div class="notice notice-info inline"><p><strong>' . esc_html__( 'Este documento está publicado y no se puede editar. Solo puedes descargarlo en los formatos disponibles.', 'documentate' ) . '</strong></p></div>';
+		}
+
+		echo '<div class="documentate-sections' . ( $is_published ? ' documentate-published' : '' ) . '">';
 		echo '<table class="form-table"><tbody>';
 
 		foreach ( $schema as $row ) {
@@ -637,7 +645,7 @@ class Documentate_Documents {
 				}
 				echo '>' . esc_html( $label ) . '</label></th>';
 				echo '<td>';
-				$this->render_array_field( $slug, $label, $item_schema, $items, $raw_repeater );
+				$this->render_array_field( $slug, $label, $item_schema, $items, $raw_repeater, $is_published );
 				if ( '' !== $description ) {
 					echo '<p class="description">' . esc_html( $description ) . '</p>';
 				}
@@ -701,7 +709,7 @@ class Documentate_Documents {
 					$options     = $this->parse_select_options( $raw_field );
 					$placeholder = $this->get_select_placeholder( $raw_field );
 					// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Attributes escaped in format_field_attributes().
-					echo '<select id="' . esc_attr( $meta_key ) . '" name="' . esc_attr( $meta_key ) . '" ' . $attribute_string . '>';
+					echo '<select id="' . esc_attr( $meta_key ) . '" name="' . esc_attr( $meta_key ) . '" ' . $attribute_string . $disabled_attr . '>';
 					if ( '' !== $placeholder ) {
 						echo '<option value="">' . esc_html( $placeholder ) . '</option>';
 					} elseif ( empty( $attributes['required'] ) ) {
@@ -713,34 +721,40 @@ class Documentate_Documents {
 					echo '</select>';
 				} elseif ( 'checkbox' === $input_type ) {
 					// Hidden field guarantees we persist an explicit "0" when unchecked.
-					echo '<input type="hidden" name="' . esc_attr( $meta_key ) . '" value="0" />';
+					// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- $disabled_attr is a safe hardcoded string.
+					echo '<input type="hidden" name="' . esc_attr( $meta_key ) . '" value="0"' . $disabled_attr . ' />';
 					echo '<label class="documentate-checkbox-wrapper">';
-					// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Attributes escaped in format_field_attributes().
-					echo '<input type="checkbox" id="' . esc_attr( $meta_key ) . '" name="' . esc_attr( $meta_key ) . '" value="1" ' . checked( '1', $normalized_value, false ) . ' ' . $attribute_string . ' />';
+					// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Attributes escaped in format_field_attributes(), $disabled_attr is safe.
+					echo '<input type="checkbox" id="' . esc_attr( $meta_key ) . '" name="' . esc_attr( $meta_key ) . '" value="1" ' . checked( '1', $normalized_value, false ) . ' ' . $attribute_string . $disabled_attr . ' />';
 					echo '<span class="screen-reader-text">' . esc_html( $label ) . '</span>';
 					echo '</label>';
 				} else {
-					// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Attributes escaped in format_field_attributes().
-					echo '<input type="' . esc_attr( $input_type ) . '" id="' . esc_attr( $meta_key ) . '" name="' . esc_attr( $meta_key ) . '" value="' . esc_attr( $normalized_value ) . '" ' . $attribute_string . ' />';
+					// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Attributes escaped in format_field_attributes(), $disabled_attr is safe.
+					echo '<input type="' . esc_attr( $input_type ) . '" id="' . esc_attr( $meta_key ) . '" name="' . esc_attr( $meta_key ) . '" value="' . esc_attr( $normalized_value ) . '" ' . $attribute_string . $disabled_attr . ' />';
 				}
 			} elseif ( 'rich' === $type ) {
-				// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- wp_editor handles output escaping.
-				wp_editor(
-					$value,
-					$meta_key,
-					array(
-						'textarea_name' => $meta_key,
-						'textarea_rows' => 8,
-						'media_buttons' => false,
-						'teeny'         => false,
-						'tinymce'       => array(
-							'toolbar1'      => 'formatselect,bold,italic,underline,link,bullist,numlist,alignleft,aligncenter,alignright,alignjustify,undo,redo,removeformat',
-							'content_style' => 'table,th,td{border:1px solid #000;border-collapse:collapse}table{border-collapse:collapse}',
-						),
-						'quicktags'     => true,
-						'editor_height' => 220,
-					)
+				$editor_settings = array(
+					'textarea_name' => $meta_key,
+					'textarea_rows' => 8,
+					'media_buttons' => false,
+					'teeny'         => false,
+					'tinymce'       => array(
+						'toolbar1'      => 'formatselect,bold,italic,underline,link,bullist,numlist,alignleft,aligncenter,alignright,alignjustify,undo,redo,removeformat',
+						'content_style' => 'table,th,td{border:1px solid #000;border-collapse:collapse}table{border-collapse:collapse}',
+					),
+					'quicktags'     => true,
+					'editor_height' => 220,
 				);
+				if ( $is_published ) {
+					$editor_settings['tinymce'] = false;
+					$editor_settings['quicktags'] = false;
+					$editor_settings['media_buttons'] = false;
+				}
+				// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- wp_editor handles output escaping.
+				wp_editor( $value, $meta_key, $editor_settings );
+				if ( $is_published ) {
+					echo '<script>document.addEventListener("DOMContentLoaded", function() { var textarea = document.getElementById("' . esc_js( $meta_key ) . '"); if (textarea) { textarea.disabled = true; textarea.readOnly = true; } });</script>';
+				}
 			} else {
 				$attributes = $this->build_scalar_input_attributes( $raw_field, 'textarea' );
 				if ( ! empty( $describedby ) ) {
@@ -755,7 +769,7 @@ class Documentate_Documents {
 				$attributes['class'] = $this->build_input_class( 'textarea' );
 				$attribute_string    = $this->format_field_attributes( $attributes );
 				// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Attributes escaped in format_field_attributes().
-				echo '<textarea id="' . esc_attr( $meta_key ) . '" name="' . esc_attr( $meta_key ) . '" ' . $attribute_string . '>' . esc_textarea( $value ) . '</textarea>';
+				echo '<textarea id="' . esc_attr( $meta_key ) . '" name="' . esc_attr( $meta_key ) . '" ' . $attribute_string . $disabled_attr . '>' . esc_textarea( $value ) . '</textarea>';
 			}
 
 			if ( '' !== $description ) {
@@ -1456,9 +1470,10 @@ class Documentate_Documents {
 	 * @param array  $item_schema  Item schema definition.
 	 * @param array  $items        Current values.
 	 * @param array  $raw_repeater Raw schema definition for this repeater.
+	 * @param bool   $is_published Whether the document is published (read-only mode).
 	 * @return void
 	 */
-	private function render_array_field( $slug, $label, $item_schema, $items, $raw_repeater = array() ) {
+	private function render_array_field( $slug, $label, $item_schema, $items, $raw_repeater = array(), $is_published = false ) {
 		$slug        = sanitize_key( $slug );
 		$label       = sanitize_text_field( $label );
 		$repeater_source = isset( $raw_repeater['definition'] ) ? $raw_repeater['definition'] : array();
@@ -1478,26 +1493,30 @@ class Documentate_Documents {
 			$raw_fields = $raw_repeater['fields'];
 		}
 
-		echo '<div class="documentate-array-field" data-array-field="' . esc_attr( $slug ) . '" style="margin-bottom:24px;">';
+		echo '<div class="documentate-array-field' . ( $is_published ? ' documentate-published' : '' ) . '" data-array-field="' . esc_attr( $slug ) . '" style="margin-bottom:24px;">';
 		echo '<div class="documentate-array-heading" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:12px;">';
 		echo '<span class="documentate-array-title" style="font-weight:600;font-size:15px;"';
 		if ( '' !== $repeater_title_attribute ) {
 			echo ' title="' . esc_attr( $repeater_title_attribute ) . '"';
 		}
 		echo '>' . esc_html( $label ) . '</span>';
-		echo '<button type="button" class="button button-secondary documentate-array-add" data-array-target="' . esc_attr( $slug ) . '">' . esc_html__( 'Añadir elemento', 'documentate' ) . '</button>';
+		if ( ! $is_published ) {
+			echo '<button type="button" class="button button-secondary documentate-array-add" data-array-target="' . esc_attr( $slug ) . '">' . esc_html__( 'Añadir elemento', 'documentate' ) . '</button>';
+		}
 		echo '</div>';
 
 		echo '<div class="documentate-array-items" id="' . esc_attr( $field_id ) . '" data-field="' . esc_attr( $slug ) . '">';
 		foreach ( $items as $index => $values ) {
 			$values = is_array( $values ) ? $values : array();
-			$this->render_array_field_item( $slug, (string) $index, $item_schema, $values, false, $raw_fields );
+			$this->render_array_field_item( $slug, (string) $index, $item_schema, $values, false, $raw_fields, $is_published );
 		}
 		echo '</div>';
 
-		echo '<template class="documentate-array-template" data-field="' . esc_attr( $slug ) . '">';
-		$this->render_array_field_item( $slug, '__INDEX__', $item_schema, array(), true, $raw_fields );
-		echo '</template>';
+		if ( ! $is_published ) {
+			echo '<template class="documentate-array-template" data-field="' . esc_attr( $slug ) . '">';
+			$this->render_array_field_item( $slug, '__INDEX__', $item_schema, array(), true, $raw_fields, $is_published );
+			echo '</template>';
+		}
 		echo '</div>';
 	}
 
@@ -1510,20 +1529,24 @@ class Documentate_Documents {
 	 * @param array  $values       Current values.
 	 * @param bool   $is_template  Whether the row is a template placeholder.
 	 * @param array  $raw_fields   Raw schema definitions for the repeater items.
+	 * @param bool   $is_published Whether the document is published (read-only mode).
 	 * @return void
 	 */
-	private function render_array_field_item( $slug, $index, $item_schema, $values, $is_template = false, $raw_fields = array() ) {
+	private function render_array_field_item( $slug, $index, $item_schema, $values, $is_template = false, $raw_fields = array(), $is_published = false ) {
 		$slug        = sanitize_key( $slug );
 		$index_attr  = (string) $index;
 		$item_schema = is_array( $item_schema ) ? $item_schema : array();
 		$values      = is_array( $values ) ? $values : array();
 		$raw_fields  = is_array( $raw_fields ) ? $raw_fields : array();
+		$disabled_attr = $is_published ? ' disabled="disabled"' : '';
 
-		echo '<div class="documentate-array-item" data-index="' . esc_attr( $index_attr ) . '" draggable="true" style="border:1px solid #e5e5e5;padding:16px;margin-bottom:12px;background:#fff;">';
-		echo '<div class="documentate-array-item-toolbar" style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px;">';
-		echo '<span class="documentate-array-handle" role="button" tabindex="0" aria-label="' . esc_attr__( 'Mover elemento', 'documentate' ) . '" style="cursor:move;user-select:none;">≡</span>';
-		echo '<button type="button" class="button-link-delete documentate-array-remove">' . esc_html__( 'Eliminar', 'documentate' ) . '</button>';
-		echo '</div>';
+		echo '<div class="documentate-array-item" data-index="' . esc_attr( $index_attr ) . '"' . ( ! $is_published ? ' draggable="true"' : '' ) . ' style="border:1px solid #e5e5e5;padding:16px;margin-bottom:12px;background:#fff;">';
+		if ( ! $is_published ) {
+			echo '<div class="documentate-array-item-toolbar" style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px;">';
+			echo '<span class="documentate-array-handle" role="button" tabindex="0" aria-label="' . esc_attr__( 'Mover elemento', 'documentate' ) . '" style="cursor:move;user-select:none;">≡</span>';
+			echo '<button type="button" class="button-link-delete documentate-array-remove">' . esc_html__( 'Eliminar', 'documentate' ) . '</button>';
+			echo '</div>';
+		}
 
 		foreach ( $item_schema as $key => $definition ) {
 			$item_key = sanitize_key( $key );
@@ -1584,7 +1607,7 @@ class Documentate_Documents {
 					$options     = $this->parse_select_options( $raw_field );
 					$placeholder = $this->get_select_placeholder( $raw_field );
 					// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Attributes escaped in format_field_attributes().
-					echo '<select id="' . esc_attr( $field_id ) . '" name="' . esc_attr( $field_name ) . '" ' . $attribute_string . '>';
+					echo '<select id="' . esc_attr( $field_id ) . '" name="' . esc_attr( $field_name ) . '" ' . $attribute_string . $disabled_attr . '>';
 					if ( '' !== $placeholder ) {
 						echo '<option value="">' . esc_html( $placeholder ) . '</option>';
 					} elseif ( empty( $attributes['required'] ) ) {
@@ -1595,15 +1618,16 @@ class Documentate_Documents {
 					}
 					echo '</select>';
 				} elseif ( 'checkbox' === $input_type ) {
-					echo '<input type="hidden" name="' . esc_attr( $field_name ) . '" value="0" />';
+					// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- $disabled_attr is a safe hardcoded string.
+					echo '<input type="hidden" name="' . esc_attr( $field_name ) . '" value="0"' . $disabled_attr . ' />';
 					echo '<label class="documentate-checkbox-wrapper">';
-					// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Attributes escaped in format_field_attributes().
-					echo '<input type="checkbox" id="' . esc_attr( $field_id ) . '" name="' . esc_attr( $field_name ) . '" value="1" ' . checked( '1', $normalized_value, false ) . ' ' . $attribute_string . ' />';
+					// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Attributes escaped in format_field_attributes(), $disabled_attr is safe.
+					echo '<input type="checkbox" id="' . esc_attr( $field_id ) . '" name="' . esc_attr( $field_name ) . '" value="1" ' . checked( '1', $normalized_value, false ) . ' ' . $attribute_string . $disabled_attr . ' />';
 					echo '<span class="screen-reader-text">' . esc_html( $label ) . '</span>';
 					echo '</label>';
 				} else {
-					// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Attributes escaped in format_field_attributes().
-					echo '<input type="' . esc_attr( $input_type ) . '" id="' . esc_attr( $field_id ) . '" name="' . esc_attr( $field_name ) . '" value="' . esc_attr( $normalized_value ) . '" ' . $attribute_string . ' />';
+					// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Attributes escaped in format_field_attributes(), $disabled_attr is safe.
+					echo '<input type="' . esc_attr( $input_type ) . '" id="' . esc_attr( $field_id ) . '" name="' . esc_attr( $field_name ) . '" value="' . esc_attr( $normalized_value ) . '" ' . $attribute_string . $disabled_attr . ' />';
 				}
 
 				if ( '' !== $description ) {
@@ -1641,7 +1665,7 @@ class Documentate_Documents {
 				$attributes['data-editor-initialized'] = 'false';
 				$attribute_string = $this->format_field_attributes( $attributes );
 				// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Attributes escaped in format_field_attributes().
-				echo '<textarea ' . $attribute_string . ' id="' . esc_attr( $field_id ) . '" name="' . esc_attr( $field_name ) . '">' . esc_textarea( $value ) . '</textarea>';
+				echo '<textarea ' . $attribute_string . $disabled_attr . ' id="' . esc_attr( $field_id ) . '" name="' . esc_attr( $field_name ) . '">' . esc_textarea( $value ) . '</textarea>';
 				if ( '' !== $description ) {
 					echo '<p id="' . esc_attr( $description_id ) . '" class="description">' . esc_html( $description ) . '</p>';
 				}
@@ -1673,7 +1697,7 @@ class Documentate_Documents {
 				$attributes['class'] = $this->build_input_class( 'textarea' );
 				$attribute_string    = $this->format_field_attributes( $attributes );
 				// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Attributes escaped in format_field_attributes().
-				echo '<textarea ' . $attribute_string . ' id="' . esc_attr( $field_id ) . '" name="' . esc_attr( $field_name ) . '">' . esc_textarea( $value ) . '</textarea>';
+				echo '<textarea ' . $attribute_string . $disabled_attr . ' id="' . esc_attr( $field_id ) . '" name="' . esc_attr( $field_name ) . '">' . esc_textarea( $value ) . '</textarea>';
 				if ( '' !== $description ) {
 					echo '<p id="' . esc_attr( $description_id ) . '" class="description">' . esc_html( $description ) . '</p>';
 				}

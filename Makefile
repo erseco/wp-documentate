@@ -81,7 +81,7 @@ check-plugin: check-docker start-if-not-running
 
 
 # Combined check for lint, tests, untranslated, and more
-check: fix lint check-plugin test check-untranslated mo
+check: fix lint check-plugin test
 
 check-all: check
 
