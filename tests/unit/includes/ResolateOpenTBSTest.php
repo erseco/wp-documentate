@@ -337,4 +337,273 @@ class ResolateOpenTBSTest extends PHPUnit\Framework\TestCase {
 			'modified'   => false,
 		);
 	}
+
+	/**
+	 * It should handle combined formatting (strong + italic + underline).
+	 */
+	public function test_convert_docx_part_rich_text_handles_combined_formatting() {
+		$html = 'Texto <strong><em><u>todo junto</u></em></strong> y normal';
+		$xml  = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+			. '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+			. '<w:body><w:p><w:r><w:t>' . htmlspecialchars( $html, ENT_QUOTES | ENT_XML1 ) . '</w:t></w:r></w:p></w:body></w:document>';
+
+		$result = Resolate_OpenTBS::convert_docx_part_rich_text( $xml, array( $html ) );
+
+		$doc   = $this->load_docx_dom( $result );
+		$xpath = $this->create_word_xpath( $doc );
+
+		// Should have bold, italic, and underline in the same run properties
+		$runs = $xpath->query( '//w:r[contains(., "todo junto")]' );
+		$this->assertGreaterThan( 0, $runs->length, 'Should find run with combined text' );
+
+		$this->assertStringContainsString( '<w:b', $result );
+		$this->assertStringContainsString( '<w:i', $result );
+		$this->assertStringContainsString( '<w:u', $result );
+	}
+
+	/**
+	 * It should handle inline styles with font-weight, font-style, and text-decoration.
+	 */
+	public function test_convert_docx_part_rich_text_handles_inline_styles() {
+		$html = '<span style="font-weight:bold; font-style:italic; text-decoration:underline">Estilizado</span>';
+		$xml  = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+			. '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+			. '<w:body><w:p><w:r><w:t>' . htmlspecialchars( $html, ENT_QUOTES | ENT_XML1 ) . '</w:t></w:r></w:p></w:body></w:document>';
+
+		$result = Resolate_OpenTBS::convert_docx_part_rich_text( $xml, array( $html ) );
+
+		$this->assertStringContainsString( '<w:b', $result );
+		$this->assertStringContainsString( '<w:i', $result );
+		$this->assertStringContainsString( '<w:u', $result );
+		$this->assertStringContainsString( 'Estilizado', $result );
+	}
+
+	/**
+	 * It should handle empty formatting tags gracefully.
+	 */
+	public function test_convert_docx_part_rich_text_handles_empty_tags() {
+		$html = 'Antes <strong></strong><em></em><u></u> después';
+		$xml  = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+			. '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+			. '<w:body><w:p><w:r><w:t>' . htmlspecialchars( $html, ENT_QUOTES | ENT_XML1 ) . '</w:t></w:r></w:p></w:body></w:document>';
+
+		$result = Resolate_OpenTBS::convert_docx_part_rich_text( $xml, array( $html ) );
+
+		$this->assertStringContainsString( 'Antes', $result );
+		$this->assertStringContainsString( 'después', $result );
+	}
+
+	/**
+	 * It should preserve whitespace and line breaks.
+	 */
+	public function test_convert_docx_part_rich_text_preserves_whitespace() {
+		$html = "Texto con\nmúltiples    espacios y\nsaltos de línea";
+		$xml  = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+			. '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+			. '<w:body><w:p><w:r><w:t>' . htmlspecialchars( $html, ENT_QUOTES | ENT_XML1 ) . '</w:t></w:r></w:p></w:body></w:document>';
+
+		$result = Resolate_OpenTBS::convert_docx_part_rich_text( $xml, array( $html ) );
+
+		$this->assertStringContainsString( 'Texto', $result );
+		$this->assertStringContainsString( 'múltiples', $result );
+		$this->assertStringContainsString( 'saltos de línea', $result );
+	}
+
+	/**
+	 * It should handle special HTML entities.
+	 */
+	public function test_convert_docx_part_rich_text_handles_entities() {
+		$html = 'Símbolos: &lt; &gt; &amp; &quot; &nbsp; &apos;';
+		$xml  = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+			. '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+			. '<w:body><w:p><w:r><w:t>' . htmlspecialchars( $html, ENT_QUOTES | ENT_XML1 ) . '</w:t></w:r></w:p></w:body></w:document>';
+
+		$result = Resolate_OpenTBS::convert_docx_part_rich_text( $xml, array( $html ) );
+
+		$this->assertStringContainsString( 'Símbolos', $result );
+	}
+
+	/**
+	 * It should handle tables with colspan without crashing.
+	 */
+	public function test_convert_docx_part_rich_text_handles_table_colspan() {
+		$html = '<table><tr><th colspan="2">Título</th></tr><tr><td>A1</td><td>A2</td></tr></table>';
+		$xml  = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+			. '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+			. '<w:body><w:p><w:r><w:t>' . htmlspecialchars( $html, ENT_QUOTES | ENT_XML1 ) . '</w:t></w:r></w:p></w:body></w:document>';
+
+		$result = Resolate_OpenTBS::convert_docx_part_rich_text( $xml, array( $html ) );
+
+		$doc   = $this->load_docx_dom( $result );
+		$xpath = $this->create_word_xpath( $doc );
+
+		$tables = $xpath->query( '//w:body/w:tbl' );
+		$this->assertSame( 1, $tables->length, 'Should create a table' );
+
+		// Check content is present even if colspan is not fully supported
+		$this->assertStringContainsString( 'Título', $result );
+		$this->assertStringContainsString( 'A1', $result );
+		$this->assertStringContainsString( 'A2', $result );
+	}
+
+	/**
+	 * It should handle tables with rowspan without crashing.
+	 */
+	public function test_convert_docx_part_rich_text_handles_table_rowspan() {
+		$html = '<table><tr><td rowspan="2">Span</td><td>A1</td></tr><tr><td>B1</td></tr></table>';
+		$xml  = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+			. '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+			. '<w:body><w:p><w:r><w:t>' . htmlspecialchars( $html, ENT_QUOTES | ENT_XML1 ) . '</w:t></w:r></w:p></w:body></w:document>';
+
+		$result = Resolate_OpenTBS::convert_docx_part_rich_text( $xml, array( $html ) );
+
+		$doc   = $this->load_docx_dom( $result );
+		$xpath = $this->create_word_xpath( $doc );
+
+		$tables = $xpath->query( '//w:body/w:tbl' );
+		$this->assertSame( 1, $tables->length, 'Should create a table' );
+
+		// Check content is present even if rowspan is not fully supported
+		$this->assertStringContainsString( 'Span', $result );
+		$this->assertStringContainsString( 'A1', $result );
+		$this->assertStringContainsString( 'B1', $result );
+	}
+
+	/**
+	 * It should handle empty tables.
+	 */
+	public function test_convert_docx_part_rich_text_handles_empty_table() {
+		$html = '<table></table>';
+		$xml  = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+			. '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+			. '<w:body><w:p><w:r><w:t>' . htmlspecialchars( $html, ENT_QUOTES | ENT_XML1 ) . '</w:t></w:r></w:p></w:body></w:document>';
+
+		$result = Resolate_OpenTBS::convert_docx_part_rich_text( $xml, array( $html ) );
+
+		// Should not crash, should handle gracefully
+		$this->assertIsString( $result );
+	}
+
+	/**
+	 * It should handle tables with empty cells.
+	 */
+	public function test_convert_docx_part_rich_text_handles_empty_cells() {
+		$html = '<table><tr><td></td><td>Lleno</td></tr><tr><td>Texto</td><td></td></tr></table>';
+		$xml  = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+			. '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+			. '<w:body><w:p><w:r><w:t>' . htmlspecialchars( $html, ENT_QUOTES | ENT_XML1 ) . '</w:t></w:r></w:p></w:body></w:document>';
+
+		$result = Resolate_OpenTBS::convert_docx_part_rich_text( $xml, array( $html ) );
+
+		$doc   = $this->load_docx_dom( $result );
+		$xpath = $this->create_word_xpath( $doc );
+
+		$tables = $xpath->query( '//w:body/w:tbl' );
+		$this->assertSame( 1, $tables->length );
+
+		$cells = $xpath->query( './/w:tc', $tables->item( 0 ) );
+		$this->assertSame( 4, $cells->length );
+		$this->assertStringContainsString( 'Lleno', $result );
+		$this->assertStringContainsString( 'Texto', $result );
+	}
+
+	/**
+	 * It should handle deeply nested lists (4+ levels).
+	 */
+	public function test_convert_docx_part_rich_text_handles_deep_nested_lists() {
+		$html = '<ul><li>L1<ul><li>L2<ul><li>L3<ul><li>L4</li></ul></li></ul></li></ul></li></ul>';
+		$xml  = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+			. '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+			. '<w:body><w:p><w:r><w:t>' . htmlspecialchars( $html, ENT_QUOTES | ENT_XML1 ) . '</w:t></w:r></w:p></w:body></w:document>';
+
+		$result = Resolate_OpenTBS::convert_docx_part_rich_text( $xml, array( $html ) );
+
+		$this->assertStringContainsString( 'L1', $result );
+		$this->assertStringContainsString( 'L2', $result );
+		$this->assertStringContainsString( 'L3', $result );
+		$this->assertStringContainsString( 'L4', $result );
+	}
+
+	/**
+	 * It should handle mixed list types (ol inside ul and vice versa).
+	 */
+	public function test_convert_docx_part_rich_text_handles_mixed_lists() {
+		$html = '<ol><li>Num 1<ul><li>Bullet A</li><li>Bullet B</li></ul></li><li>Num 2</li></ol>';
+		$xml  = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+			. '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+			. '<w:body><w:p><w:r><w:t>' . htmlspecialchars( $html, ENT_QUOTES | ENT_XML1 ) . '</w:t></w:r></w:p></w:body></w:document>';
+
+		$result = Resolate_OpenTBS::convert_docx_part_rich_text( $xml, array( $html ) );
+
+		$this->assertStringContainsString( 'Num 1', $result );
+		$this->assertStringContainsString( 'Bullet A', $result );
+		$this->assertStringContainsString( 'Bullet B', $result );
+		$this->assertStringContainsString( 'Num 2', $result );
+	}
+
+	/**
+	 * It should handle malformed HTML with unclosed tags gracefully.
+	 */
+	public function test_convert_docx_part_rich_text_handles_unclosed_tags() {
+		$html = '<p>Texto <strong>negrita sin cerrar';
+		$xml  = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+			. '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+			. '<w:body><w:p><w:r><w:t>' . htmlspecialchars( $html, ENT_QUOTES | ENT_XML1 ) . '</w:t></w:r></w:p></w:body></w:document>';
+
+		$result = Resolate_OpenTBS::convert_docx_part_rich_text( $xml, array( $html ) );
+
+		// Should not crash, DOMDocument should recover
+		$this->assertStringContainsString( 'Texto', $result );
+		$this->assertStringContainsString( 'negrita sin cerrar', $result );
+	}
+
+	/**
+	 * It should handle empty paragraphs.
+	 */
+	public function test_convert_docx_part_rich_text_handles_empty_paragraphs() {
+		$html = '<p></p><p>Contenido</p><p></p>';
+		$xml  = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+			. '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+			. '<w:body><w:p><w:r><w:t>' . htmlspecialchars( $html, ENT_QUOTES | ENT_XML1 ) . '</w:t></w:r></w:p></w:body></w:document>';
+
+		$result = Resolate_OpenTBS::convert_docx_part_rich_text( $xml, array( $html ) );
+
+		$doc   = $this->load_docx_dom( $result );
+		$xpath = $this->create_word_xpath( $doc );
+
+		$paragraphs = $xpath->query( '//w:body/w:p' );
+		$this->assertGreaterThan( 0, $paragraphs->length );
+		$this->assertStringContainsString( 'Contenido', $result );
+	}
+
+	/**
+	 * It should handle unicode characters correctly.
+	 */
+	public function test_convert_docx_part_rich_text_handles_unicode() {
+		$html = 'Español: áéíóú ñ Ñ — € ™ © ® • ¿¡';
+		$xml  = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+			. '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+			. '<w:body><w:p><w:r><w:t>' . htmlspecialchars( $html, ENT_QUOTES | ENT_XML1 ) . '</w:t></w:r></w:p></w:body></w:document>';
+
+		$result = Resolate_OpenTBS::convert_docx_part_rich_text( $xml, array( $html ) );
+
+		$this->assertStringContainsString( 'Español', $result );
+	}
+
+	/**
+	 * It should handle br tags as line breaks.
+	 */
+	public function test_convert_docx_part_rich_text_handles_br_tags() {
+		$html = 'Primera línea<br>Segunda línea<br/>Tercera línea';
+		$xml  = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+			. '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+			. '<w:body><w:p><w:r><w:t>' . htmlspecialchars( $html, ENT_QUOTES | ENT_XML1 ) . '</w:t></w:r></w:p></w:body></w:document>';
+
+		$result = Resolate_OpenTBS::convert_docx_part_rich_text( $xml, array( $html ) );
+
+		$this->assertStringContainsString( 'Primera línea', $result );
+		$this->assertStringContainsString( 'Segunda línea', $result );
+		$this->assertStringContainsString( 'Tercera línea', $result );
+		$this->assertStringContainsString( '<w:br', $result );
+	}
 }

@@ -378,11 +378,12 @@ class Resolate_OpenTBS {
 	/**
 	 * Convert HTML placeholders inside an ODT XML part to styled markup.
 	 *
+	 * CHANGE: Expose rich text conversion for direct usage in tests and callers.
+	 *
 	 * @param string               $xml    Original XML contents.
 	 * @param array<string,string> $lookup Rich text lookup table.
 	 * @return string|WP_Error
 	 */
-	// CHANGE: Expose rich text conversion for direct usage in tests and callers.
 	public static function convert_odt_part_rich_text( $xml, $lookup ) {
 		$lookup = self::prepare_rich_lookup( $lookup ); // CHANGE: Normalize raw lookup values defensively.
 		if ( empty( $lookup ) ) {
@@ -1557,6 +1558,7 @@ class Resolate_OpenTBS {
 
 		$tbl = $doc->createElementNS( self::WORD_NAMESPACE, 'w:tbl' );
 		// Add default table borders: 1px black for all edges and inner lines.
+		// phpcs:ignore WordPress.NamingConventions.ValidVariableName.VariableNotSnakeCase -- $tblPr matches WordprocessingML spec (w:tblPr).
 		$tblPr    = $doc->createElementNS( self::WORD_NAMESPACE, 'w:tblPr' );
 		$borders  = $doc->createElementNS( self::WORD_NAMESPACE, 'w:tblBorders' );
 		$edges    = array( 'top', 'left', 'bottom', 'right', 'insideH', 'insideV' );
@@ -1568,7 +1570,9 @@ class Resolate_OpenTBS {
 			$el->setAttribute( 'w:color', '000000' );
 			$borders->appendChild( $el );
 		}
+		// phpcs:ignore WordPress.NamingConventions.ValidVariableName.VariableNotSnakeCase -- $tblPr matches WordprocessingML spec.
 		$tblPr->appendChild( $borders );
+		// phpcs:ignore WordPress.NamingConventions.ValidVariableName.VariableNotSnakeCase -- $tblPr matches WordprocessingML spec.
 		$tbl->appendChild( $tblPr );
 
 		foreach ( $rows as $row ) {

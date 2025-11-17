@@ -585,4 +585,223 @@ class ResolateDocumentPersistenceTest extends WP_UnitTestCase {
 			. '<tbody><tr><td>A</td><td>Uno</td></tr><tr><td>B</td><td>Dos</td></tr></tbody></table>'
 			. '<script>console.warn("remove me");</script>';
 	}
+
+	/**
+	 * It should persist rich text with combined formatting correctly.
+	 */
+	public function test_rich_text_with_combined_formatting_persists() {
+		$term_id = $this->create_scalar_document_type();
+		$post_id = $this->create_document_for_term( $term_id, 'Doc con formato combinado' );
+
+		$html_with_combined = '<p>Texto <strong><em><u>todo junto</u></em></strong> y <span style="font-weight:bold">negrita inline</span></p>';
+
+		$this->prepare_scalar_post_payload(
+			$term_id,
+			array(
+				'nombre'   => 'Test',
+				'unidades' => '1',
+				'email'    => 'test@test.com',
+				'telefono' => '+34123456789',
+				'cuerpo'   => $html_with_combined,
+			)
+		);
+
+		$this->compose_and_save_document( $post_id, array( 'post_title' => 'Doc con formato combinado' ) );
+
+		$stored_body = get_post_meta( $post_id, 'resolate_field_cuerpo', true );
+		$this->assertStringContainsString( '<strong>', $stored_body );
+		$this->assertStringContainsString( '<em>', $stored_body );
+		$this->assertStringContainsString( '<u>', $stored_body );
+		$this->assertStringContainsString( 'todo junto', $stored_body );
+	}
+
+	/**
+	 * It should persist unicode characters correctly.
+	 */
+	public function test_unicode_characters_persist_correctly() {
+		$term_id = $this->create_scalar_document_type();
+		$post_id = $this->create_document_for_term( $term_id, 'Doc con unicode' );
+
+		$unicode_html = '<p>Español: áéíóú ñ Ñ — € ™ © ® • ¿¡</p><p>Otros: 中文 العربية עברית</p>';
+
+		$this->prepare_scalar_post_payload(
+			$term_id,
+			array(
+				'nombre'   => 'Test Unicode',
+				'unidades' => '1',
+				'email'    => 'test@test.com',
+				'telefono' => '+34123456789',
+				'cuerpo'   => $unicode_html,
+			)
+		);
+
+		$this->compose_and_save_document( $post_id, array( 'post_title' => 'Doc con unicode' ) );
+
+		$stored_body = get_post_meta( $post_id, 'resolate_field_cuerpo', true );
+		$this->assertStringContainsString( 'Español', $stored_body );
+		$this->assertStringContainsString( 'áéíóú', $stored_body );
+		$this->assertStringContainsString( 'ñ', $stored_body );
+	}
+
+	/**
+	 * It should handle very long HTML content without corruption.
+	 */
+	public function test_long_html_content_persists_without_corruption() {
+		$term_id = $this->create_scalar_document_type();
+		$post_id = $this->create_document_for_term( $term_id, 'Doc con contenido largo' );
+
+		// Build a long HTML string with multiple sections
+		$long_html = '';
+		for ( $i = 1; $i <= 10; $i++ ) {
+			$long_html .= '<h2>Sección ' . $i . '</h2>';
+			$long_html .= '<p>Contenido de la sección ' . $i . ' con <strong>negrita</strong>, <em>cursiva</em> y <u>subrayado</u>.</p>';
+			$long_html .= '<ul><li>Item 1</li><li>Item 2</li><li>Item 3</li></ul>';
+			$long_html .= '<table><tr><th>Col1</th><th>Col2</th></tr><tr><td>Data1</td><td>Data2</td></tr></table>';
+		}
+
+		$this->prepare_scalar_post_payload(
+			$term_id,
+			array(
+				'nombre'   => 'Test Largo',
+				'unidades' => '1',
+				'email'    => 'test@test.com',
+				'telefono' => '+34123456789',
+				'cuerpo'   => $long_html,
+			)
+		);
+
+		$this->compose_and_save_document( $post_id, array( 'post_title' => 'Doc con contenido largo' ) );
+
+		$stored_body = get_post_meta( $post_id, 'resolate_field_cuerpo', true );
+		$this->assertStringContainsString( 'Sección 1', $stored_body );
+		$this->assertStringContainsString( 'Sección 10', $stored_body );
+		$this->assertStringContainsString( '<strong>', $stored_body );
+		$this->assertStringContainsString( '<table>', $stored_body );
+	}
+
+	/**
+	 * It should handle empty and whitespace-only HTML gracefully.
+	 */
+	public function test_empty_and_whitespace_html_handled_gracefully() {
+		$term_id = $this->create_scalar_document_type();
+		$post_id = $this->create_document_for_term( $term_id, 'Doc con HTML vacío' );
+
+		$empty_html = '<p></p><p>   </p><strong></strong><em></em>';
+
+		$this->prepare_scalar_post_payload(
+			$term_id,
+			array(
+				'nombre'   => 'Test Vacío',
+				'unidades' => '1',
+				'email'    => 'test@test.com',
+				'telefono' => '+34123456789',
+				'cuerpo'   => $empty_html,
+			)
+		);
+
+		$this->compose_and_save_document( $post_id, array( 'post_title' => 'Doc con HTML vacío' ) );
+
+		$stored_body = get_post_meta( $post_id, 'resolate_field_cuerpo', true );
+		// Should handle without errors
+		$this->assertIsString( $stored_body );
+	}
+
+	/**
+	 * It should handle tables with various complex structures.
+	 */
+	public function test_complex_tables_persist_correctly() {
+		$term_id = $this->create_scalar_document_type();
+		$post_id = $this->create_document_for_term( $term_id, 'Doc con tablas complejas' );
+
+		$complex_table = '<table>'
+			. '<thead><tr><th colspan="2">Título combinado</th></tr></thead>'
+			. '<tbody>'
+			. '<tr><td rowspan="2">Span vertical</td><td>Normal</td></tr>'
+			. '<tr><td>Otra celda</td></tr>'
+			. '<tr><td></td><td>Celda vacía a la izquierda</td></tr>'
+			. '</tbody>'
+			. '</table>';
+
+		$this->prepare_scalar_post_payload(
+			$term_id,
+			array(
+				'nombre'   => 'Test Tablas',
+				'unidades' => '1',
+				'email'    => 'test@test.com',
+				'telefono' => '+34123456789',
+				'cuerpo'   => $complex_table,
+			)
+		);
+
+		$this->compose_and_save_document( $post_id, array( 'post_title' => 'Doc con tablas complejas' ) );
+
+		$stored_body = get_post_meta( $post_id, 'resolate_field_cuerpo', true );
+		$this->assertStringContainsString( '<table>', $stored_body );
+		$this->assertStringContainsString( 'Título combinado', $stored_body );
+		$this->assertStringContainsString( 'Span vertical', $stored_body );
+	}
+
+	/**
+	 * It should handle deeply nested lists in persistence.
+	 */
+	public function test_deeply_nested_lists_persist() {
+		$term_id = $this->create_scalar_document_type();
+		$post_id = $this->create_document_for_term( $term_id, 'Doc con listas anidadas' );
+
+		$nested_lists = '<ul>'
+			. '<li>Nivel 1A'
+			. '<ul><li>Nivel 2A<ul><li>Nivel 3A<ul><li>Nivel 4A</li></ul></li></ul></li></ul>'
+			. '</li>'
+			. '<li>Nivel 1B</li>'
+			. '</ul>';
+
+		$this->prepare_scalar_post_payload(
+			$term_id,
+			array(
+				'nombre'   => 'Test Listas',
+				'unidades' => '1',
+				'email'    => 'test@test.com',
+				'telefono' => '+34123456789',
+				'cuerpo'   => $nested_lists,
+			)
+		);
+
+		$this->compose_and_save_document( $post_id, array( 'post_title' => 'Doc con listas anidadas' ) );
+
+		$stored_body = get_post_meta( $post_id, 'resolate_field_cuerpo', true );
+		// Note: WordPress sanitization might strip certain characters in nested contexts
+		$this->assertStringContainsString( '1A', $stored_body );
+		$this->assertStringContainsString( '2A', $stored_body );
+		$this->assertStringContainsString( '3A', $stored_body );
+		$this->assertStringContainsString( '4A', $stored_body );
+		$this->assertStringContainsString( '1B', $stored_body );
+		$this->assertStringContainsString( '<ul>', $stored_body );
+		$this->assertStringContainsString( '<li>', $stored_body );
+	}
+
+	/**
+	 * It should handle mixed HTML entities correctly.
+	 */
+	public function test_html_entities_persist_correctly() {
+		$term_id = $this->create_scalar_document_type();
+		$post_id = $this->create_document_for_term( $term_id, 'Doc con entidades' );
+
+		$entities_html = '<p>Símbolos: &lt; &gt; &amp; &quot; &nbsp; &copy; &trade;</p>';
+
+		$this->prepare_scalar_post_payload(
+			$term_id,
+			array(
+				'nombre'   => 'Test Entidades',
+				'unidades' => '1',
+				'email'    => 'test@test.com',
+				'telefono' => '+34123456789',
+				'cuerpo'   => $entities_html,
+			)
+		);
+
+		$this->compose_and_save_document( $post_id, array( 'post_title' => 'Doc con entidades' ) );
+
+		$stored_body = get_post_meta( $post_id, 'resolate_field_cuerpo', true );
+		$this->assertStringContainsString( 'Símbolos', $stored_body );
+	}
 }

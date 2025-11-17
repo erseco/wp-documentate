@@ -2148,7 +2148,8 @@ class Resolate_Documents {
 
 							$structured_fields[ $slug ] = array(
 								'type'  => 'array',
-								'value' => ! empty( $items ) ? wp_json_encode( $items, JSON_UNESCAPED_UNICODE ) : '[]',
+								// Use the same JSON_HEX flags as in save_dynamic_fields_meta for consistency.
+								'value' => ! empty( $items ) ? wp_json_encode( $items, JSON_HEX_QUOT | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS ) : '[]',
 							);
 							continue;
 			}
