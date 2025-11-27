@@ -1,0 +1,379 @@
+/**
+ * Documentate Collaborative Editor Styles
+ *
+ * Styles for TipTap collaborative editor with table support.
+ *
+ * @package Documentate
+ */
+
+/* Editor Wrapper */
+.documentate-collab-wrapper {
+	border: 1px solid #c3c4c7;
+	border-radius: 4px;
+	background: #fff;
+	margin-bottom: 10px;
+}
+
+/* Toolbar */
+.documentate-collab-toolbar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px;
+	padding: 8px;
+	background: #f6f7f7;
+	border-bottom: 1px solid #c3c4c7;
+	border-radius: 4px 4px 0 0;
+}
+
+.documentate-collab-toolbar-group {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+}
+
+.documentate-collab-toolbar-separator {
+	width: 1px;
+	height: 24px;
+	background: #c3c4c7;
+	margin: 0 4px;
+}
+
+/* Toolbar Buttons */
+.documentate-collab-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 28px;
+	height: 28px;
+	padding: 0 6px;
+	border: 1px solid transparent;
+	border-radius: 3px;
+	background: transparent;
+	color: #1e1e1e;
+	font-size: 14px;
+	cursor: pointer;
+	transition: all 0.15s ease;
+}
+
+.documentate-collab-btn:hover {
+	background: #dcdcde;
+	border-color: #c3c4c7;
+}
+
+.documentate-collab-btn:active {
+	background: #c3c4c7;
+}
+
+.documentate-collab-btn.active {
+	background: #2271b1;
+	border-color: #2271b1;
+	color: #fff;
+}
+
+.documentate-collab-btn:focus {
+	outline: 2px solid #2271b1;
+	outline-offset: 1px;
+}
+
+/* Table buttons - hidden by default */
+.documentate-collab-btn-table {
+	display: none;
+}
+
+/* Toolbar Select */
+.documentate-collab-select {
+	height: 28px;
+	padding: 0 8px;
+	border: 1px solid #c3c4c7;
+	border-radius: 3px;
+	background: #fff;
+	font-size: 13px;
+	cursor: pointer;
+}
+
+.documentate-collab-select:focus {
+	outline: 2px solid #2271b1;
+	outline-offset: 1px;
+}
+
+/* Connection Status */
+.documentate-collab-status {
+	margin-left: auto;
+	font-size: 12px;
+	color: #646970;
+}
+
+.documentate-collab-connection {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.documentate-collab-connection[data-status="connecting"] {
+	color: #dba617;
+}
+
+.documentate-collab-connection[data-status="connected"] {
+	color: #00a32a;
+}
+
+.documentate-collab-connection[data-status="disconnected"] {
+	color: #d63638;
+}
+
+.documentate-collab-users {
+	color: #646970;
+	margin-left: 4px;
+}
+
+/* Editor Content Area */
+.documentate-collab-editor {
+	min-height: 200px;
+	padding: 12px 15px;
+	overflow-y: auto;
+}
+
+.documentate-collab-editor:focus {
+	outline: none;
+}
+
+/* ProseMirror Content Styles */
+.documentate-collab-editor .ProseMirror {
+	min-height: 180px;
+	outline: none;
+}
+
+.documentate-collab-editor .ProseMirror:focus {
+	outline: none;
+}
+
+/* Typography */
+.documentate-collab-editor p {
+	margin: 0 0 1em;
+	line-height: 1.6;
+}
+
+.documentate-collab-editor h1,
+.documentate-collab-editor h2,
+.documentate-collab-editor h3,
+.documentate-collab-editor h4 {
+	margin: 1.5em 0 0.5em;
+	line-height: 1.3;
+}
+
+.documentate-collab-editor h1:first-child,
+.documentate-collab-editor h2:first-child,
+.documentate-collab-editor h3:first-child,
+.documentate-collab-editor h4:first-child {
+	margin-top: 0;
+}
+
+.documentate-collab-editor h1 { font-size: 2em; }
+.documentate-collab-editor h2 { font-size: 1.5em; }
+.documentate-collab-editor h3 { font-size: 1.25em; }
+.documentate-collab-editor h4 { font-size: 1.1em; }
+
+.documentate-collab-editor ul,
+.documentate-collab-editor ol {
+	margin: 0 0 1em;
+	padding-left: 1.5em;
+}
+
+.documentate-collab-editor li {
+	margin-bottom: 0.25em;
+}
+
+.documentate-collab-editor a {
+	color: #2271b1;
+	text-decoration: underline;
+}
+
+.documentate-collab-editor a:hover {
+	color: #135e96;
+}
+
+/* Table Styles */
+.documentate-collab-editor table.documentate-table {
+	border-collapse: collapse;
+	width: 100%;
+	margin: 1em 0;
+	table-layout: fixed;
+}
+
+.documentate-collab-editor table.documentate-table th,
+.documentate-collab-editor table.documentate-table td {
+	border: 1px solid #1e1e1e;
+	padding: 8px 12px;
+	vertical-align: top;
+	position: relative;
+}
+
+.documentate-collab-editor table.documentate-table th {
+	background: #f6f7f7;
+	font-weight: 600;
+	text-align: left;
+}
+
+.documentate-collab-editor table.documentate-table td {
+	background: #fff;
+}
+
+/* Table cell selection */
+.documentate-collab-editor .selectedCell::after {
+	content: "";
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	background: rgba(34, 113, 177, 0.15);
+	pointer-events: none;
+}
+
+/* Table resize handles */
+.documentate-collab-editor .column-resize-handle {
+	position: absolute;
+	right: -2px;
+	top: 0;
+	bottom: 0;
+	width: 4px;
+	background: #2271b1;
+	cursor: col-resize;
+	z-index: 20;
+}
+
+.documentate-collab-editor .tableWrapper {
+	margin: 1em 0;
+	overflow-x: auto;
+}
+
+.documentate-collab-editor .resize-cursor {
+	cursor: col-resize;
+}
+
+/* Text Alignment */
+.documentate-collab-editor [style*="text-align: left"],
+.documentate-collab-editor .text-left {
+	text-align: left;
+}
+
+.documentate-collab-editor [style*="text-align: center"],
+.documentate-collab-editor .text-center {
+	text-align: center;
+}
+
+.documentate-collab-editor [style*="text-align: right"],
+.documentate-collab-editor .text-right {
+	text-align: right;
+}
+
+.documentate-collab-editor [style*="text-align: justify"],
+.documentate-collab-editor .text-justify {
+	text-align: justify;
+}
+
+/* Collaboration Cursor Styles */
+.documentate-collab-editor .collaboration-cursor__caret {
+	border-left: 2px solid;
+	border-right: none;
+	margin-left: -1px;
+	margin-right: -1px;
+	pointer-events: none;
+	position: relative;
+	word-break: normal;
+}
+
+.documentate-collab-editor .collaboration-cursor__label {
+	position: absolute;
+	top: -1.4em;
+	left: -1px;
+	font-size: 11px;
+	font-weight: 600;
+	font-style: normal;
+	line-height: 1;
+	padding: 2px 4px;
+	border-radius: 3px 3px 3px 0;
+	white-space: nowrap;
+	color: #fff;
+	user-select: none;
+	pointer-events: none;
+}
+
+/* Empty editor placeholder */
+.documentate-collab-editor .is-editor-empty:first-child::before {
+	content: attr(data-placeholder);
+	color: #a0a5aa;
+	float: left;
+	height: 0;
+	pointer-events: none;
+}
+
+/* Loading state */
+.documentate-collab-wrapper.loading {
+	opacity: 0.6;
+	pointer-events: none;
+}
+
+.documentate-collab-wrapper.loading::after {
+	content: "Cargando editor...";
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	padding: 10px 20px;
+	background: #fff;
+	border: 1px solid #c3c4c7;
+	border-radius: 4px;
+	z-index: 100;
+}
+
+/* Error state */
+.documentate-collab-wrapper.error {
+	border-color: #d63638;
+}
+
+.documentate-collab-wrapper.error::after {
+	content: "Error al cargar el editor";
+	color: #d63638;
+	padding: 10px;
+	display: block;
+}
+
+/* Responsive adjustments */
+@media screen and (max-width: 782px) {
+	.documentate-collab-toolbar {
+		gap: 2px;
+		padding: 6px;
+	}
+
+	.documentate-collab-btn {
+		min-width: 32px;
+		height: 32px;
+	}
+
+	.documentate-collab-toolbar-separator {
+		display: none;
+	}
+
+	.documentate-collab-status {
+		width: 100%;
+		margin-top: 6px;
+		justify-content: center;
+	}
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+	.documentate-collab-wrapper {
+		border-width: 2px;
+	}
+
+	.documentate-collab-btn {
+		border-width: 2px;
+	}
+
+	.documentate-collab-btn.active {
+		outline: 2px solid #000;
+	}
+}

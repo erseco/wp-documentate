@@ -79,10 +79,12 @@ class Documentate_Admin_Settings {
 		);
 
 		$fields = array(
-			'conversion_engine'     => __( 'Motor de conversión', 'documentate' ),
-			'collabora_base_url'    => __( 'URL de Collabora Online', 'documentate' ),
-			'collabora_lang'        => __( 'Idioma para Collabora', 'documentate' ),
-			'collabora_disable_ssl' => __( 'Omitir verificación SSL (Collabora)', 'documentate' ),
+			'conversion_engine'       => __( 'Motor de conversión', 'documentate' ),
+			'collabora_base_url'      => __( 'URL de Collabora Online', 'documentate' ),
+			'collabora_lang'          => __( 'Idioma para Collabora', 'documentate' ),
+			'collabora_disable_ssl'   => __( 'Omitir verificación SSL (Collabora)', 'documentate' ),
+			'collaborative_enabled'   => __( 'Modo colaborativo', 'documentate' ),
+			'collaborative_signaling' => __( 'Servidor de signaling WebRTC', 'documentate' ),
 		);
 
 		foreach ( $fields as $field_id => $field_title ) {
@@ -167,6 +169,40 @@ class Documentate_Admin_Settings {
 	}
 
 	/**
+	 * Render collaborative mode toggle.
+	 */
+	public function collaborative_enabled_render() {
+		$options = get_option( 'documentate_settings', array() );
+		$checked = isset( $options['collaborative_enabled'] ) && '1' === $options['collaborative_enabled'];
+
+		echo '<label>';
+		echo '<input type="checkbox" name="documentate_settings[collaborative_enabled]" value="1" ' . checked( $checked, true, false ) . '> ';
+		echo esc_html__( 'Activar edición colaborativa en tiempo real usando TipTap y Yjs.', 'documentate' );
+		echo '</label>';
+		echo '<p class="description">' . esc_html__( 'Reemplaza el editor clásico TinyMCE por TipTap con soporte para edición colaborativa via WebRTC.', 'documentate' ) . '</p>';
+	}
+
+	/**
+	 * Render WebRTC signaling server field.
+	 */
+	public function collaborative_signaling_render() {
+		$options = get_option( 'documentate_settings', array() );
+		$value   = isset( $options['collaborative_signaling'] ) ? esc_url( $options['collaborative_signaling'] ) : '';
+		if ( '' === $value ) {
+			$value = 'wss://signaling.yjs.dev';
+		}
+
+		echo '<input type="url" class="regular-text" name="documentate_settings[collaborative_signaling]" value="' . esc_attr( $value ) . '" placeholder="wss://signaling.yjs.dev">';
+		echo '<p class="description">' . esc_html__( 'Servidor de signaling para WebRTC. Por defecto usa el servidor público de Yjs.', 'documentate' ) . '</p>';
+		echo '<p class="description"><strong>' . esc_html__( 'Servidores públicos disponibles:', 'documentate' ) . '</strong></p>';
+		echo '<ul class="description" style="list-style:disc;margin-left:20px;">';
+		echo '<li><code>wss://signaling.yjs.dev</code> ' . esc_html__( '(Yjs oficial)', 'documentate' ) . '</li>';
+		echo '<li><code>wss://y-webrtc-signaling-eu.herokuapp.com</code> ' . esc_html__( '(Europa)', 'documentate' ) . '</li>';
+		echo '<li><code>wss://y-webrtc-signaling-us.herokuapp.com</code> ' . esc_html__( '(USA)', 'documentate' ) . '</li>';
+		echo '</ul>';
+	}
+
+	/**
 	 * Options Page.
 	 *
 	 * Renders the settings page.
@@ -212,6 +248,15 @@ class Documentate_Admin_Settings {
 		$input['collabora_lang'] = $lang;
 
 		$input['collabora_disable_ssl'] = isset( $input['collabora_disable_ssl'] ) && '1' === $input['collabora_disable_ssl'] ? '1' : '0';
+
+		// Validate collaborative settings.
+		$input['collaborative_enabled'] = isset( $input['collaborative_enabled'] ) && '1' === $input['collaborative_enabled'] ? '1' : '0';
+
+		$signaling_url = isset( $input['collaborative_signaling'] ) ? trim( (string) $input['collaborative_signaling'] ) : '';
+		if ( '' === $signaling_url ) {
+			$signaling_url = 'wss://signaling.yjs.dev';
+		}
+		$input['collaborative_signaling'] = esc_url_raw( $signaling_url );
 
 		return $input;
 	}

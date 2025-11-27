@@ -724,23 +724,33 @@ class Documentate_Documents {
 					echo '<input type="' . esc_attr( $input_type ) . '" id="' . esc_attr( $meta_key ) . '" name="' . esc_attr( $meta_key ) . '" value="' . esc_attr( $normalized_value ) . '" ' . $attribute_string . ' />';
 				}
 			} elseif ( 'rich' === $type ) {
-				// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- wp_editor handles output escaping.
-				wp_editor(
-					$value,
-					$meta_key,
-					array(
-						'textarea_name' => $meta_key,
-						'textarea_rows' => 8,
-						'media_buttons' => false,
-						'teeny'         => false,
-						'tinymce'       => array(
-							'toolbar1'      => 'formatselect,bold,italic,underline,link,bullist,numlist,alignleft,aligncenter,alignright,alignjustify,undo,redo,removeformat',
-							'content_style' => 'table,th,td{border:1px solid #000;border-collapse:collapse}table{border-collapse:collapse}',
-						),
-						'quicktags'     => true,
-						'editor_height' => 220,
-					)
-				);
+				// Check if collaborative editing is enabled.
+				$is_collaborative = class_exists( 'Documentate_Admin' ) && Documentate_Admin::is_collaborative_enabled();
+
+				if ( $is_collaborative ) {
+					// Render TipTap collaborative editor container.
+					echo '<div class="documentate-collab-container">';
+					echo '<textarea id="' . esc_attr( $meta_key ) . '" name="' . esc_attr( $meta_key ) . '" class="documentate-collab-textarea" rows="8">' . esc_textarea( $value ) . '</textarea>';
+					echo '</div>';
+				} else {
+					// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- wp_editor handles output escaping.
+					wp_editor(
+						$value,
+						$meta_key,
+						array(
+							'textarea_name' => $meta_key,
+							'textarea_rows' => 8,
+							'media_buttons' => false,
+							'teeny'         => false,
+							'tinymce'       => array(
+								'toolbar1'      => 'formatselect,bold,italic,underline,link,bullist,numlist,alignleft,aligncenter,alignright,alignjustify,undo,redo,removeformat',
+								'content_style' => 'table,th,td{border:1px solid #000;border-collapse:collapse}table{border-collapse:collapse}',
+							),
+							'quicktags'     => true,
+							'editor_height' => 220,
+						)
+					);
+				}
 			} else {
 				$attributes = $this->build_scalar_input_attributes( $raw_field, 'textarea' );
 				if ( ! empty( $describedby ) ) {
@@ -1634,14 +1644,32 @@ class Documentate_Documents {
 				if ( ! isset( $attributes['rows'] ) ) {
 					$attributes['rows'] = 8;
 				}
-				$classes = trim(
-					$this->build_input_class( 'textarea' ) . ' documentate-array-rich' . ( $is_template ? ' documentate-array-rich-template' : '' )
-				);
-				$attributes['class'] = $classes;
-				$attributes['data-editor-initialized'] = 'false';
-				$attribute_string = $this->format_field_attributes( $attributes );
-				// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Attributes escaped in format_field_attributes().
-				echo '<textarea ' . $attribute_string . ' id="' . esc_attr( $field_id ) . '" name="' . esc_attr( $field_name ) . '">' . esc_textarea( $value ) . '</textarea>';
+
+				// Check if collaborative editing is enabled.
+				$is_collaborative = class_exists( 'Documentate_Admin' ) && Documentate_Admin::is_collaborative_enabled();
+
+				if ( $is_collaborative ) {
+					// Render TipTap collaborative editor container for array fields.
+					$classes = trim(
+						$this->build_input_class( 'textarea' ) . ' documentate-array-rich documentate-collab-textarea' . ( $is_template ? ' documentate-array-rich-template' : '' )
+					);
+					$attributes['class'] = $classes;
+					$attribute_string = $this->format_field_attributes( $attributes );
+					echo '<div class="documentate-collab-container">';
+					// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Attributes escaped in format_field_attributes().
+					echo '<textarea ' . $attribute_string . ' id="' . esc_attr( $field_id ) . '" name="' . esc_attr( $field_name ) . '">' . esc_textarea( $value ) . '</textarea>';
+					echo '</div>';
+				} else {
+					$classes = trim(
+						$this->build_input_class( 'textarea' ) . ' documentate-array-rich' . ( $is_template ? ' documentate-array-rich-template' : '' )
+					);
+					$attributes['class'] = $classes;
+					$attributes['data-editor-initialized'] = 'false';
+					$attribute_string = $this->format_field_attributes( $attributes );
+					// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Attributes escaped in format_field_attributes().
+					echo '<textarea ' . $attribute_string . ' id="' . esc_attr( $field_id ) . '" name="' . esc_attr( $field_name ) . '">' . esc_textarea( $value ) . '</textarea>';
+				}
+
 				if ( '' !== $description ) {
 					echo '<p id="' . esc_attr( $description_id ) . '" class="description">' . esc_html( $description ) . '</p>';
 				}
