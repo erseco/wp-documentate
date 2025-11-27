@@ -27,6 +27,16 @@ class Documentate_Documents {
 		const ARRAY_FIELD_MAX_ITEMS = 20;
 
 	/**
+	 * Check if collaborative editing is enabled in settings.
+	 *
+	 * @return bool True if collaborative editing is enabled.
+	 */
+	private function is_collaborative_editing_enabled() {
+		$options = get_option( 'documentate_settings', array() );
+		return isset( $options['collaborative_enabled'] ) && '1' === $options['collaborative_enabled'];
+	}
+
+	/**
 	 * Constructor.
 	 */
 	public function __construct() {
@@ -725,7 +735,7 @@ class Documentate_Documents {
 				}
 			} elseif ( 'rich' === $type ) {
 				// Check if collaborative editing is enabled.
-				$is_collaborative = class_exists( 'Documentate_Admin' ) && Documentate_Admin::is_collaborative_enabled();
+				$is_collaborative = $this->is_collaborative_editing_enabled();
 
 				if ( $is_collaborative ) {
 					// Render TipTap collaborative editor container.
@@ -1646,7 +1656,7 @@ class Documentate_Documents {
 				}
 
 				// Check if collaborative editing is enabled.
-				$is_collaborative = class_exists( 'Documentate_Admin' ) && Documentate_Admin::is_collaborative_enabled();
+				$is_collaborative = $this->is_collaborative_editing_enabled();
 
 				if ( $is_collaborative ) {
 					// Render TipTap collaborative editor container for array fields.
