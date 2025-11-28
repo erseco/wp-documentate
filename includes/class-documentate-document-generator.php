@@ -353,7 +353,7 @@ class Documentate_Document_Generator {
 				if ( $alias_key !== $tbs_name ) {
 					$fields[ $alias_key ] = $prepared;
 				}
-				if ( 'rich' === $type ) {
+				if ( in_array( $type, array( 'rich', 'html' ), true ) ) {
 						self::remember_rich_field_value( $prepared );
 				}
 			}
@@ -399,7 +399,7 @@ class Documentate_Document_Generator {
 				}
 					$field_type               = isset( $info['type'] ) ? sanitize_key( $info['type'] ) : 'rich';
 					$fields[ $placeholder ]   = self::prepare_field_value( $value, $field_type, 'text' );
-				if ( 'rich' === $field_type ) {
+				if ( in_array( $field_type, array( 'rich', 'html' ), true ) ) {
 						self::remember_rich_field_value( $fields[ $placeholder ] );
 				}
 			}
@@ -587,7 +587,7 @@ class Documentate_Document_Generator {
 		$field_type = sanitize_key( $field_type );
 		$value      = is_string( $value ) ? $value : '';
 
-		if ( 'rich' === $field_type ) {
+		if ( in_array( $field_type, array( 'rich', 'html' ), true ) ) {
 			return self::normalize_field_value( wp_kses_post( $value ), $data_type );
 		}
 

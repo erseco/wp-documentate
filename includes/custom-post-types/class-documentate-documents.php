@@ -27,6 +27,16 @@ class Documentate_Documents {
 		const ARRAY_FIELD_MAX_ITEMS = 20;
 
 	/**
+	 * Check if collaborative editing is enabled in settings.
+	 *
+	 * @return bool True if collaborative editing is enabled.
+	 */
+	private function is_collaborative_editing_enabled() {
+		$options = get_option( 'documentate_settings', array() );
+		return isset( $options['collaborative_enabled'] ) && '1' === $options['collaborative_enabled'];
+	}
+
+	/**
 	 * Constructor.
 	 */
 	public function __construct() {
@@ -724,23 +734,33 @@ class Documentate_Documents {
 					echo '<input type="' . esc_attr( $input_type ) . '" id="' . esc_attr( $meta_key ) . '" name="' . esc_attr( $meta_key ) . '" value="' . esc_attr( $normalized_value ) . '" ' . $attribute_string . ' />';
 				}
 			} elseif ( 'rich' === $type ) {
-				// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- wp_editor handles output escaping.
-				wp_editor(
-					$value,
-					$meta_key,
-					array(
-						'textarea_name' => $meta_key,
-						'textarea_rows' => 8,
-						'media_buttons' => false,
-						'teeny'         => false,
-						'tinymce'       => array(
-							'toolbar1'      => 'formatselect,bold,italic,underline,link,bullist,numlist,alignleft,aligncenter,alignright,alignjustify,undo,redo,removeformat',
-							'content_style' => 'table,th,td{border:1px solid #000;border-collapse:collapse}table{border-collapse:collapse}',
-						),
-						'quicktags'     => true,
-						'editor_height' => 220,
-					)
-				);
+				// Check if collaborative editing is enabled.
+				$is_collaborative = $this->is_collaborative_editing_enabled();
+
+				if ( $is_collaborative ) {
+					// Render TipTap collaborative editor container.
+					echo '<div class="documentate-collab-container">';
+					echo '<textarea id="' . esc_attr( $meta_key ) . '" name="' . esc_attr( $meta_key ) . '" class="documentate-collab-textarea" rows="8">' . esc_textarea( $value ) . '</textarea>';
+					echo '</div>';
+				} else {
+					// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- wp_editor handles output escaping.
+					wp_editor(
+						$value,
+						$meta_key,
+						array(
+							'textarea_name' => $meta_key,
+							'textarea_rows' => 8,
+							'media_buttons' => false,
+							'teeny'         => false,
+							'tinymce'       => array(
+								'toolbar1'      => 'formatselect,bold,italic,underline,link,bullist,numlist,alignleft,aligncenter,alignright,alignjustify,undo,redo,removeformat',
+								'content_style' => 'table,th,td{border:1px solid #000;border-collapse:collapse}table{border-collapse:collapse}',
+							),
+							'quicktags'     => true,
+							'editor_height' => 220,
+						)
+					);
+				}
 			} else {
 				$attributes = $this->build_scalar_input_attributes( $raw_field, 'textarea' );
 				if ( ! empty( $describedby ) ) {
@@ -1634,14 +1654,32 @@ class Documentate_Documents {
 				if ( ! isset( $attributes['rows'] ) ) {
 					$attributes['rows'] = 8;
 				}
-				$classes = trim(
-					$this->build_input_class( 'textarea' ) . ' documentate-array-rich' . ( $is_template ? ' documentate-array-rich-template' : '' )
-				);
-				$attributes['class'] = $classes;
-				$attributes['data-editor-initialized'] = 'false';
-				$attribute_string = $this->format_field_attributes( $attributes );
-				// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Attributes escaped in format_field_attributes().
-				echo '<textarea ' . $attribute_string . ' id="' . esc_attr( $field_id ) . '" name="' . esc_attr( $field_name ) . '">' . esc_textarea( $value ) . '</textarea>';
+
+				// Check if collaborative editing is enabled.
+				$is_collaborative = $this->is_collaborative_editing_enabled();
+
+				if ( $is_collaborative ) {
+					// Render TipTap collaborative editor container for array fields.
+					$classes = trim(
+						$this->build_input_class( 'textarea' ) . ' documentate-array-rich documentate-collab-textarea' . ( $is_template ? ' documentate-array-rich-template' : '' )
+					);
+					$attributes['class'] = $classes;
+					$attribute_string = $this->format_field_attributes( $attributes );
+					echo '<div class="documentate-collab-container">';
+					// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Attributes escaped in format_field_attributes().
+					echo '<textarea ' . $attribute_string . ' id="' . esc_attr( $field_id ) . '" name="' . esc_attr( $field_name ) . '">' . esc_textarea( $value ) . '</textarea>';
+					echo '</div>';
+				} else {
+					$classes = trim(
+						$this->build_input_class( 'textarea' ) . ' documentate-array-rich' . ( $is_template ? ' documentate-array-rich-template' : '' )
+					);
+					$attributes['class'] = $classes;
+					$attributes['data-editor-initialized'] = 'false';
+					$attribute_string = $this->format_field_attributes( $attributes );
+					// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Attributes escaped in format_field_attributes().
+					echo '<textarea ' . $attribute_string . ' id="' . esc_attr( $field_id ) . '" name="' . esc_attr( $field_name ) . '">' . esc_textarea( $value ) . '</textarea>';
+				}
+
 				if ( '' !== $description ) {
 					echo '<p id="' . esc_attr( $description_id ) . '" class="description">' . esc_html( $description ) . '</p>';
 				}
@@ -1754,26 +1792,27 @@ class Documentate_Documents {
 	private function remove_linebreak_artifacts( $value ) {
 		$value = (string) $value;
 
-		// 1) Remove paragraphs that only contain stray literal newline markers (n or rn).
-		$value = preg_replace( '#<p(?:[^>]*)>(?:\s|&nbsp;)*(?:rn|n)+(?:\s|&nbsp;)*</p>#i', '', $value );
+		// 1) Remove paragraphs that only contain stray literal newline markers (n or rn) or whitespace.
+		// NOTE: Do NOT use case-insensitive flag to avoid matching "N" in words like "Numbered".
+		$value = preg_replace( '#<p(?:[^>]*)>(?:\s|&nbsp;)*(?:rn|n)*(?:\s|&nbsp;)*</p>#', '', $value );
 		if ( ! is_string( $value ) ) {
 			$value = '';
 		}
 
 		// 2) Remove standalone markers between any two tags: >  n  <  => ><
-		$value = preg_replace( '#>(?:\s|&nbsp;)*(?:rn|n)+(?:\s|&nbsp;)*<#i', '><', $value );
+		$value = preg_replace( '#>(?:\s|&nbsp;)*(?:rn|n)+(?:\s|&nbsp;)*<#', '><', $value );
 		if ( ! is_string( $value ) ) {
 			$value = '';
 		}
 
 		// 3) Remove markers right after opening block/list/table tags.
-		$value = preg_replace( '#(<(?:ul|ol|table|thead|tbody|tfoot|tr|td|th|li)[^>]*>)(?:\s|&nbsp;)*(?:rn|n)+#i', '$1', $value );
+		$value = preg_replace( '#(<(?:ul|ol|table|thead|tbody|tfoot|tr|td|th|li)[^>]*>)(?:\s|&nbsp;)*(?:rn|n)+#', '$1', $value );
 		if ( ! is_string( $value ) ) {
 			$value = '';
 		}
 
 		// 4) Remove markers right before closing block/list/table tags.
-		$value = preg_replace( '#(?:\s|&nbsp;)*(?:rn|n)+(?:\s|&nbsp;)*(</(?:ul|ol|table|thead|tbody|tfoot|tr|td|th|li)>)#i', '$1', $value );
+		$value = preg_replace( '#(?:\s|&nbsp;)*(?:rn|n)+(?:\s|&nbsp;)*(</(?:ul|ol|table|thead|tbody|tfoot|tr|td|th|li)>)#', '$1', $value );
 		if ( ! is_string( $value ) ) {
 			$value = '';
 		}

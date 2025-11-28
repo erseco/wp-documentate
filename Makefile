@@ -94,6 +94,10 @@ test: start-if-not-running
 	if [ -n "$(FILTER)" ]; then CMD="$$CMD --filter $(FILTER)"; fi; \
 	npx wp-env run tests-cli --env-cwd=wp-content/plugins/documentate $$CMD --testdox --colors=always
 
+# Run document generation tests only
+test-generation: start-if-not-running
+	npx wp-env run tests-cli --env-cwd=wp-content/plugins/documentate ./vendor/bin/phpunit --testsuite=generation --testdox --colors=always
+
 # Run unit tests in verbose mode. Honor TEST filter if provided.
 test-verbose: start-if-not-running
 	@CMD="./vendor/bin/phpunit"; \
@@ -101,11 +105,25 @@ test-verbose: start-if-not-running
 	CMD="$$CMD --debug --verbose"; \
 	npx wp-env run tests-cli --env-cwd=wp-content/plugins/documentate $$CMD --colors=always
 
-test-e2e:
-	npm run test:e2e
+# Ensure tests environment has admin user and plugin active
+setup-tests-env:
+	@echo "Setting up tests environment..."
+	@npx wp-env run tests-cli wp core install \
+		--url=http://localhost:8889 \
+		--title="Documentate Tests" \
+		--admin_user=admin \
+		--admin_password=password \
+		--admin_email=admin@example.com \
+		--skip-email 2>/dev/null || true
+	@npx wp-env run tests-cli wp plugin activate documentate 2>/dev/null || true
+	@npx wp-env run tests-cli wp rewrite structure '/%postname%/' --hard 2>/dev/null || true
 
-test-e2e-visual:
-	npm run test:e2e -- --ui
+# Run E2E tests with Playwright against wp-env tests environment (port 8889)
+test-e2e: start-if-not-running setup-tests-env
+	WP_BASE_URL=http://localhost:8889 npm run test:e2e
+
+test-e2e-visual: start-if-not-running setup-tests-env
+	WP_BASE_URL=http://localhost:8889 npm run test:e2e -- --ui
 
 
 logs:
@@ -251,6 +269,7 @@ help:
 	@echo "                         make test FILTER=MyTest"
 	@echo "                         make test FILE=tests/MyTest.php"
 	@echo "                         make test FILE=tests/MyTest.php FILTER=test_my_feature"
+	@echo "  test-generation    - Run document generation tests only"
 	@echo ""
 	@echo "  test-e2e           - Run E2E tests (non-interactive)"
 	@echo "  test-e2e-visual    - Run E2E tests with visual test UI"

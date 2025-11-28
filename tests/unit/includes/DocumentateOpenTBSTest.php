@@ -88,13 +88,14 @@ class DocumentateOpenTBSTest extends PHPUnit\Framework\TestCase {
 		$xpath      = $this->create_word_xpath( $doc );
 		$paragraphs = $xpath->query( '//w:body/w:p' );
 
-		$this->assertGreaterThanOrEqual( 2, $paragraphs->length );
+		// Nested lists produce separate paragraphs: Uno, Dos, 2.1, 2.2.
+		$this->assertGreaterThanOrEqual( 4, $paragraphs->length );
 		$this->assertSame( '• Uno', trim( $paragraphs->item( 0 )->textContent ) );
+		$this->assertSame( '• Dos', trim( $paragraphs->item( 1 )->textContent ) );
 
-		$second = trim( $paragraphs->item( 1 )->textContent );
-		$this->assertStringContainsString( '• Dos', $second );
-		$this->assertStringContainsString( '2.1', $second );
-		$this->assertStringContainsString( '2.2', $second );
+		// Verify nested ordered list items appear with numbering.
+		$this->assertStringContainsString( '2.1', $result );
+		$this->assertStringContainsString( '2.2', $result );
 
 		$this->assertStringContainsString( 'xml:space="preserve">• </w:t>', $result );
 	}
