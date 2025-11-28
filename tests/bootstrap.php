@@ -40,6 +40,10 @@ require_once __DIR__ . '/includes/class-wp-unittest-factory-for-documentate-docu
 // Include the custom base test class.
 require_once __DIR__ . '/includes/class-wp-unittest-documentate-test-base.php';
 
+// Include document generation test helpers.
+require_once __DIR__ . '/includes/class-document-xml-asserter.php';
+require_once __DIR__ . '/includes/class-documentate-generation-test-base.php';
+
 tests_add_filter( 'after_setup_theme', function() {
 
         // Register the custom factories with the global WordPress factory.

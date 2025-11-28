@@ -1792,26 +1792,27 @@ class Documentate_Documents {
 	private function remove_linebreak_artifacts( $value ) {
 		$value = (string) $value;
 
-		// 1) Remove paragraphs that only contain stray literal newline markers (n or rn).
-		$value = preg_replace( '#<p(?:[^>]*)>(?:\s|&nbsp;)*(?:rn|n)+(?:\s|&nbsp;)*</p>#i', '', $value );
+		// 1) Remove paragraphs that only contain stray literal newline markers (n or rn) or whitespace.
+		// NOTE: Do NOT use case-insensitive flag to avoid matching "N" in words like "Numbered".
+		$value = preg_replace( '#<p(?:[^>]*)>(?:\s|&nbsp;)*(?:rn|n)*(?:\s|&nbsp;)*</p>#', '', $value );
 		if ( ! is_string( $value ) ) {
 			$value = '';
 		}
 
 		// 2) Remove standalone markers between any two tags: >  n  <  => ><
-		$value = preg_replace( '#>(?:\s|&nbsp;)*(?:rn|n)+(?:\s|&nbsp;)*<#i', '><', $value );
+		$value = preg_replace( '#>(?:\s|&nbsp;)*(?:rn|n)+(?:\s|&nbsp;)*<#', '><', $value );
 		if ( ! is_string( $value ) ) {
 			$value = '';
 		}
 
 		// 3) Remove markers right after opening block/list/table tags.
-		$value = preg_replace( '#(<(?:ul|ol|table|thead|tbody|tfoot|tr|td|th|li)[^>]*>)(?:\s|&nbsp;)*(?:rn|n)+#i', '$1', $value );
+		$value = preg_replace( '#(<(?:ul|ol|table|thead|tbody|tfoot|tr|td|th|li)[^>]*>)(?:\s|&nbsp;)*(?:rn|n)+#', '$1', $value );
 		if ( ! is_string( $value ) ) {
 			$value = '';
 		}
 
 		// 4) Remove markers right before closing block/list/table tags.
-		$value = preg_replace( '#(?:\s|&nbsp;)*(?:rn|n)+(?:\s|&nbsp;)*(</(?:ul|ol|table|thead|tbody|tfoot|tr|td|th|li)>)#i', '$1', $value );
+		$value = preg_replace( '#(?:\s|&nbsp;)*(?:rn|n)+(?:\s|&nbsp;)*(</(?:ul|ol|table|thead|tbody|tfoot|tr|td|th|li)>)#', '$1', $value );
 		if ( ! is_string( $value ) ) {
 			$value = '';
 		}

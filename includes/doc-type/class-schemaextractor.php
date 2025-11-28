@@ -357,6 +357,9 @@ class SchemaExtractor {
 		$repeaters = array();
 		$stack     = array();
 
+		// First pass: identify repeaters from tbs:row or tbs:cell block patterns.
+		$tbs_repeaters = $this->detect_tbs_repeaters( $placeholders );
+
 		foreach ( $placeholders as $token ) {
 			$parameters = isset( $token['parameters'] ) ? $token['parameters'] : array();
 			$block_mode = isset( $parameters['block'] ) ? strtolower( (string) $parameters['block'] ) : '';
@@ -369,6 +372,18 @@ class SchemaExtractor {
 
 			if ( 'end' === $block_mode ) {
 				array_pop( $stack );
+				continue;
+			}
+
+			// Handle OpenTBS tbs:row/tbs:cell style repeaters.
+			if ( preg_match( '/^tbs:(row|cell|p|page)/', $block_mode ) ) {
+				$token_name = isset( $token['name'] ) ? (string) $token['name'] : '';
+				$base_name  = $this->extract_tbs_repeater_base( $token_name );
+				if ( '' !== $base_name && isset( $tbs_repeaters[ $base_name ] ) && ! isset( $repeaters[ $base_name . '_idx' ] ) ) {
+					$repeater_entry                         = $this->build_tbs_repeater_entry( $base_name, $tbs_repeaters[ $base_name ] );
+					$repeaters[]                            = $repeater_entry;
+					$repeaters[ $base_name . '_idx' ]       = count( $repeaters ) - 1;
+				}
 				continue;
 			}
 
@@ -713,5 +728,108 @@ class SchemaExtractor {
 		}
 
 		return false;
+	}
+
+	/**
+	 * Detect TBS-style repeaters (tbs:row, tbs:cell, etc.) from placeholders.
+	 *
+	 * @param array<int,array<string,mixed>> $placeholders Parsed placeholders.
+	 * @return array<string,array<string,mixed>> Map of base name to field info.
+	 */
+	private function detect_tbs_repeaters( $placeholders ) {
+		$repeaters = array();
+
+		foreach ( $placeholders as $token ) {
+			$name       = isset( $token['name'] ) ? (string) $token['name'] : '';
+			$parameters = isset( $token['parameters'] ) ? $token['parameters'] : array();
+			$block_mode = isset( $parameters['block'] ) ? strtolower( (string) $parameters['block'] ) : '';
+
+			// Look for patterns like [a.field;block=tbs:row].
+			if ( preg_match( '/^tbs:(row|cell|p|page)/', $block_mode ) && false !== strpos( $name, '.' ) ) {
+				$base_name = $this->extract_tbs_repeater_base( $name );
+				if ( '' === $base_name ) {
+					continue;
+				}
+
+				if ( ! isset( $repeaters[ $base_name ] ) ) {
+					$repeaters[ $base_name ] = array(
+						'fields' => array(),
+					);
+				}
+			}
+
+			// Collect all fields that belong to a repeater (e.g., a.field patterns).
+			if ( false !== strpos( $name, '.' ) ) {
+				$base_name = $this->extract_tbs_repeater_base( $name );
+				if ( '' !== $base_name && isset( $repeaters[ $base_name ] ) ) {
+					$parts      = explode( '.', $name );
+					$field_name = isset( $parts[1] ) ? $parts[1] : '';
+					if ( '' !== $field_name ) {
+						$repeaters[ $base_name ]['fields'][ $field_name ] = array(
+							'name' => $field_name,
+							'slug' => sanitize_key( $field_name ),
+							'type' => 'text',
+						);
+					}
+				}
+			}
+		}
+
+		return $repeaters;
+	}
+
+	/**
+	 * Extract the base repeater name from a dotted placeholder name.
+	 *
+	 * @param string $name Placeholder name (e.g., "a.firstname").
+	 * @return string Base name (e.g., "a") or empty string.
+	 */
+	private function extract_tbs_repeater_base( $name ) {
+		if ( false === strpos( $name, '.' ) ) {
+			return '';
+		}
+		$parts = explode( '.', $name );
+		return sanitize_key( $parts[0] );
+	}
+
+	/**
+	 * Build a repeater entry for a TBS-style repeater.
+	 *
+	 * @param string              $base_name Base name of the repeater.
+	 * @param array<string,mixed> $info      Collected repeater info.
+	 * @return array<string,mixed>
+	 */
+	private function build_tbs_repeater_entry( $base_name, $info ) {
+		$fields = array();
+
+		if ( isset( $info['fields'] ) && is_array( $info['fields'] ) ) {
+			foreach ( $info['fields'] as $field_name => $field_info ) {
+				$fields[] = array(
+					'name'        => $field_name,
+					'slug'        => sanitize_key( $field_name ),
+					'type'        => isset( $field_info['type'] ) ? $field_info['type'] : 'text',
+					'title'       => '',
+					'placeholder' => '',
+					'description' => '',
+					'pattern'     => '',
+					'patternmsg'  => '',
+					'minvalue'    => '',
+					'maxvalue'    => '',
+					'length'      => '',
+					'parameters'  => array(),
+					'raw'         => '',
+					'source'      => '',
+				);
+			}
+		}
+
+		return array(
+			'name'        => $base_name,
+			'slug'        => sanitize_key( $base_name ),
+			'title'       => '',
+			'description' => '',
+			'parameters'  => array(),
+			'fields'      => $fields,
+		);
 	}
 }

@@ -319,7 +319,7 @@ class Documentate_Admin {
 	 * Prevent post lock from being set for collaborative documents.
 	 *
 	 * @param array|bool $lock The lock data or false.
-	 * @param int $post_id The post ID.
+	 * @param int        $post_id The post ID.
 	 * @return array|bool
 	 */
 	public function disable_post_lock( $lock, $post_id ) {
