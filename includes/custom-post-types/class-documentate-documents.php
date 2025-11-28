@@ -2185,11 +2185,13 @@ class Documentate_Documents {
 						$items = $this->get_array_field_items_from_structured( $existing_structured[ $slug ] );
 				}
 
-							$structured_fields[ $slug ] = array(
-								'type'  => 'array',
-								// Use the same JSON_HEX flags as in save_dynamic_fields_meta for consistency.
-								'value' => ! empty( $items ) ? wp_json_encode( $items, JSON_HEX_QUOT | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS ) : '[]',
-							);
+							// Use the same JSON_HEX flags as in save_dynamic_fields_meta for consistency.
+						// wp_slash() preserves backslashes (like \n and \uXXXX) through WordPress's wp_unslash() in wp_insert_post().
+						$json_value                 = ! empty( $items ) ? wp_json_encode( $items, JSON_HEX_QUOT | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS ) : '[]';
+						$structured_fields[ $slug ] = array(
+							'type'  => 'array',
+							'value' => wp_slash( $json_value ),
+						);
 							continue;
 			}
 

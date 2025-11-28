@@ -366,16 +366,18 @@ class Documentate_Document_Generator {
 				}
 				// Debug logging - enable with WP_DEBUG.
 				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-					error_log( sprintf(
-						'DOCUMENTATE [%s]: schema_type=%s, effective_type=%s, raw_has_html=%s, prepared_has_html=%s, raw_len=%d, prep_len=%d',
-						$slug,
-						$original_type,
-						$type,
-						self::value_contains_block_html( $value ) ? 'YES' : 'NO',
-						$has_html_in_prepared ? 'YES' : 'NO',
-						strlen( $value ),
-						strlen( $prepared )
-					) );
+					error_log(
+						sprintf(
+							'DOCUMENTATE [%s]: schema_type=%s, effective_type=%s, raw_has_html=%s, prepared_has_html=%s, raw_len=%d, prep_len=%d',
+							$slug,
+							$original_type,
+							$type,
+							self::value_contains_block_html( $value ) ? 'YES' : 'NO',
+							$has_html_in_prepared ? 'YES' : 'NO',
+							strlen( $value ),
+							strlen( $prepared )
+						)
+					);
 					if ( self::value_contains_block_html( $value ) && strlen( $value ) < 500 ) {
 						error_log( 'DOCUMENTATE [' . $slug . '] RAW: ' . substr( $value, 0, 300 ) );
 					}

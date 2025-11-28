@@ -513,4 +513,466 @@ class DocumentNonMatchingFieldHtmlTest extends Documentate_Generation_Test_Base 
 		// Verify no raw HTML.
 		$this->asserter->assertNoRawHtmlTags( $xml );
 	}
+
+	/**
+	 * Test HTML with deep indentation (TinyMCE style) converts in DOCX.
+	 *
+	 * This test reproduces the bug where HTML with indentation spaces like:
+	 *   <ul>
+	 *        <li>Item</li>
+	 *   </ul>
+	 * was not being converted because TBS removes newlines but leaves spaces.
+	 */
+	public function test_docx_html_with_tinymce_indentation_converts() {
+		$html = "<h3>Encabezado de prueba</h3>\n" .
+				"Primer párrafo con texto de ejemplo.\n\n" .
+				"Segundo párrafo con <strong>negritas</strong>.\n" .
+				"<ul>\n" .
+				"     <li>Elemento uno</li>\n" .
+				"     <li>Elemento dos</li>\n" .
+				"</ul>\n" .
+				"<table>\n" .
+				"<tbody>\n" .
+				"<tr>\n" .
+				"<th>Col 1</th>\n" .
+				"<th>Col 2</th>\n" .
+				"</tr>\n" .
+				"<tr>\n" .
+				"<td>Dato A1</td>\n" .
+				"<td>Dato A2</td>\n" .
+				"</tr>\n" .
+				"</tbody>\n" .
+				"</table>";
+
+		$type_data = $this->create_doc_type_with_template( 'nonmatching-field.docx' );
+		$post_id   = $this->create_document_with_data( $type_data['term_id'], array( 'datos' => $html ) );
+
+		$path = $this->generate_document( $post_id, 'docx' );
+		$xml  = $this->extract_document_xml( $path );
+
+		$this->assertNotFalse( $xml );
+		$this->assertStringContainsString( 'Encabezado de prueba', $xml );
+		$this->assertStringContainsString( 'Primer párrafo', $xml );
+		$this->assertStringContainsString( 'negritas', $xml );
+		$this->assertStringContainsString( 'Elemento uno', $xml );
+		$this->assertStringContainsString( 'Elemento dos', $xml );
+		$this->assertStringContainsString( 'Dato A1', $xml );
+		$this->assertStringContainsString( 'w:tbl', $xml, 'Should have native table.' );
+		$this->asserter->assertNoRawHtmlTags( $xml );
+	}
+
+	/**
+	 * Test HTML with deep indentation converts in ODT.
+	 */
+	public function test_odt_html_with_tinymce_indentation_converts() {
+		$html = "<h3>Encabezado de prueba</h3>\n" .
+				"Primer párrafo con texto de ejemplo.\n\n" .
+				"<ul>\n" .
+				"     <li>Elemento uno</li>\n" .
+				"     <li>Elemento dos</li>\n" .
+				"</ul>\n" .
+				"<table>\n" .
+				"<tbody>\n" .
+				"<tr>\n" .
+				"<th>Col 1</th>\n" .
+				"<th>Col 2</th>\n" .
+				"</tr>\n" .
+				"<tr>\n" .
+				"<td>Dato A1</td>\n" .
+				"<td>Dato A2</td>\n" .
+				"</tr>\n" .
+				"</tbody>\n" .
+				"</table>";
+
+		$type_data = $this->create_doc_type_with_template( 'nonmatching-field.odt' );
+		$post_id   = $this->create_document_with_data( $type_data['term_id'], array( 'datos' => $html ) );
+
+		$path = $this->generate_document( $post_id, 'odt' );
+		$xml  = $this->extract_document_xml( $path );
+
+		$this->assertNotFalse( $xml );
+		$this->assertStringContainsString( 'Encabezado de prueba', $xml );
+		$this->assertStringContainsString( 'Elemento uno', $xml );
+		$this->assertStringContainsString( 'Dato A1', $xml );
+		$this->assertStringContainsString( 'table:table', $xml, 'Should have native table.' );
+		$this->asserter->assertNoRawHtmlTags( $xml );
+	}
+
+	// =========================================================================
+	// Edge Cases for HTML Whitespace Normalization
+	// =========================================================================
+
+	/**
+	 * Test HTML with tabs instead of spaces converts correctly.
+	 */
+	public function test_docx_html_with_tab_indentation_converts() {
+		$html = "<table>\n" .
+				"\t<tbody>\n" .
+				"\t\t<tr>\n" .
+				"\t\t\t<td>Tab indented</td>\n" .
+				"\t\t</tr>\n" .
+				"\t</tbody>\n" .
+				"</table>";
+
+		$type_data = $this->create_doc_type_with_template( 'nonmatching-field.docx' );
+		$post_id   = $this->create_document_with_data( $type_data['term_id'], array( 'datos' => $html ) );
+
+		$path = $this->generate_document( $post_id, 'docx' );
+		$xml  = $this->extract_document_xml( $path );
+
+		$this->assertNotFalse( $xml );
+		$this->assertStringContainsString( 'Tab indented', $xml );
+		$this->assertStringContainsString( 'w:tbl', $xml, 'Should have native table.' );
+		$this->asserter->assertNoRawHtmlTags( $xml );
+	}
+
+	/**
+	 * Test HTML with mixed tabs and spaces converts correctly.
+	 */
+	public function test_docx_html_with_mixed_tabs_and_spaces_converts() {
+		$html = "<ul>\n" .
+				"  \t  <li>Mixed indent 1</li>\n" .
+				"\t  \t<li>Mixed indent 2</li>\n" .
+				"</ul>";
+
+		$type_data = $this->create_doc_type_with_template( 'nonmatching-field.docx' );
+		$post_id   = $this->create_document_with_data( $type_data['term_id'], array( 'datos' => $html ) );
+
+		$path = $this->generate_document( $post_id, 'docx' );
+		$xml  = $this->extract_document_xml( $path );
+
+		$this->assertNotFalse( $xml );
+		$this->assertStringContainsString( 'Mixed indent 1', $xml );
+		$this->assertStringContainsString( 'Mixed indent 2', $xml );
+		$this->asserter->assertNoRawHtmlTags( $xml );
+	}
+
+	/**
+	 * Test HTML with multiple consecutive newlines converts correctly.
+	 */
+	public function test_docx_html_with_multiple_newlines_converts() {
+		$html = "<h3>Title</h3>\n\n\n\n" .
+				"<p>After many newlines</p>\n\n" .
+				"<table>\n\n" .
+				"<tr>\n\n" .
+				"<td>Cell</td>\n\n" .
+				"</tr>\n\n" .
+				"</table>";
+
+		$type_data = $this->create_doc_type_with_template( 'nonmatching-field.docx' );
+		$post_id   = $this->create_document_with_data( $type_data['term_id'], array( 'datos' => $html ) );
+
+		$path = $this->generate_document( $post_id, 'docx' );
+		$xml  = $this->extract_document_xml( $path );
+
+		$this->assertNotFalse( $xml );
+		$this->assertStringContainsString( 'Title', $xml );
+		$this->assertStringContainsString( 'After many newlines', $xml );
+		$this->assertStringContainsString( 'Cell', $xml );
+		$this->assertStringContainsString( 'w:tbl', $xml, 'Should have native table.' );
+		$this->asserter->assertNoRawHtmlTags( $xml );
+	}
+
+	/**
+	 * Test HTML with Windows-style CRLF line endings converts correctly.
+	 */
+	public function test_docx_html_with_crlf_line_endings_converts() {
+		$html = "<table>\r\n" .
+				"<tr>\r\n" .
+				"<td>Windows CRLF</td>\r\n" .
+				"</tr>\r\n" .
+				"</table>";
+
+		$type_data = $this->create_doc_type_with_template( 'nonmatching-field.docx' );
+		$post_id   = $this->create_document_with_data( $type_data['term_id'], array( 'datos' => $html ) );
+
+		$path = $this->generate_document( $post_id, 'docx' );
+		$xml  = $this->extract_document_xml( $path );
+
+		$this->assertNotFalse( $xml );
+		$this->assertStringContainsString( 'Windows CRLF', $xml );
+		$this->assertStringContainsString( 'w:tbl', $xml, 'Should have native table.' );
+		$this->asserter->assertNoRawHtmlTags( $xml );
+	}
+
+	/**
+	 * Test that intentional spaces inside text content are preserved.
+	 */
+	public function test_docx_preserves_spaces_in_text_content() {
+		$html = "<p>Text with   multiple   spaces</p>\n" .
+				"<p>Another paragraph</p>";
+
+		$type_data = $this->create_doc_type_with_template( 'nonmatching-field.docx' );
+		$post_id   = $this->create_document_with_data( $type_data['term_id'], array( 'datos' => $html ) );
+
+		$path = $this->generate_document( $post_id, 'docx' );
+		$xml  = $this->extract_document_xml( $path );
+
+		$this->assertNotFalse( $xml );
+		// The text should be present (spaces may be normalized by Word)
+		$this->assertStringContainsString( 'Text with', $xml );
+		$this->assertStringContainsString( 'multiple', $xml );
+		$this->assertStringContainsString( 'spaces', $xml );
+		$this->asserter->assertNoRawHtmlTags( $xml );
+	}
+
+	/**
+	 * Test HTML with style attributes containing spaces converts correctly.
+	 */
+	public function test_docx_html_with_style_attributes_converts() {
+		$html = "<table style=\"border-collapse: collapse; width: 100%\">\n" .
+				"<tr>\n" .
+				"<td style=\"width: 33.3333%\">Styled cell 1</td>\n" .
+				"<td style=\"width: 33.3333%\">Styled cell 2</td>\n" .
+				"<td style=\"width: 33.3333%\">Styled cell 3</td>\n" .
+				"</tr>\n" .
+				"</table>";
+
+		$type_data = $this->create_doc_type_with_template( 'nonmatching-field.docx' );
+		$post_id   = $this->create_document_with_data( $type_data['term_id'], array( 'datos' => $html ) );
+
+		$path = $this->generate_document( $post_id, 'docx' );
+		$xml  = $this->extract_document_xml( $path );
+
+		$this->assertNotFalse( $xml );
+		$this->assertStringContainsString( 'Styled cell 1', $xml );
+		$this->assertStringContainsString( 'Styled cell 2', $xml );
+		$this->assertStringContainsString( 'Styled cell 3', $xml );
+		$this->assertStringContainsString( 'w:tbl', $xml, 'Should have native table.' );
+		$this->asserter->assertNoRawHtmlTags( $xml );
+	}
+
+	/**
+	 * Test HTML with &nbsp; entities converts correctly.
+	 */
+	public function test_docx_html_with_nbsp_entities_converts() {
+		$html = "<p>Text&nbsp;with&nbsp;nbsp</p>\n" .
+				"&nbsp;\n" .
+				"<table>\n" .
+				"<tr>\n" .
+				"<td>Cell&nbsp;1</td>\n" .
+				"<td>Cell&nbsp;2</td>\n" .
+				"</tr>\n" .
+				"</table>\n" .
+				"&nbsp;";
+
+		$type_data = $this->create_doc_type_with_template( 'nonmatching-field.docx' );
+		$post_id   = $this->create_document_with_data( $type_data['term_id'], array( 'datos' => $html ) );
+
+		$path = $this->generate_document( $post_id, 'docx' );
+		$xml  = $this->extract_document_xml( $path );
+
+		$this->assertNotFalse( $xml );
+		$this->assertStringContainsString( 'Text', $xml );
+		$this->assertStringContainsString( 'with', $xml );
+		$this->assertStringContainsString( 'nbsp', $xml );
+		$this->assertStringContainsString( 'w:tbl', $xml, 'Should have native table.' );
+		$this->asserter->assertNoRawHtmlTags( $xml );
+	}
+
+	/**
+	 * Test HTML with loose text between block tags (no <p> wrapping).
+	 */
+	public function test_docx_html_with_unwrapped_text_converts() {
+		$html = "<h3>Header</h3>\n" .
+				"This is loose text without p tags.\n\n" .
+				"Another loose paragraph.\n" .
+				"<ul>\n" .
+				"<li>Item</li>\n" .
+				"</ul>\n" .
+				"More loose text at the end.";
+
+		$type_data = $this->create_doc_type_with_template( 'nonmatching-field.docx' );
+		$post_id   = $this->create_document_with_data( $type_data['term_id'], array( 'datos' => $html ) );
+
+		$path = $this->generate_document( $post_id, 'docx' );
+		$xml  = $this->extract_document_xml( $path );
+
+		$this->assertNotFalse( $xml );
+		$this->assertStringContainsString( 'Header', $xml );
+		$this->assertStringContainsString( 'loose text', $xml );
+		$this->assertStringContainsString( 'Item', $xml );
+		$this->asserter->assertNoRawHtmlTags( $xml );
+	}
+
+	/**
+	 * Test deeply nested HTML with extreme indentation converts correctly.
+	 */
+	public function test_docx_html_with_deep_nesting_converts() {
+		$html = "<table>\n" .
+				"    <tbody>\n" .
+				"        <tr>\n" .
+				"            <td>\n" .
+				"                <ul>\n" .
+				"                    <li>\n" .
+				"                        <p>Deeply nested content</p>\n" .
+				"                    </li>\n" .
+				"                </ul>\n" .
+				"            </td>\n" .
+				"        </tr>\n" .
+				"    </tbody>\n" .
+				"</table>";
+
+		$type_data = $this->create_doc_type_with_template( 'nonmatching-field.docx' );
+		$post_id   = $this->create_document_with_data( $type_data['term_id'], array( 'datos' => $html ) );
+
+		$path = $this->generate_document( $post_id, 'docx' );
+		$xml  = $this->extract_document_xml( $path );
+
+		$this->assertNotFalse( $xml );
+		$this->assertStringContainsString( 'Deeply nested content', $xml );
+		$this->assertStringContainsString( 'w:tbl', $xml, 'Should have native table.' );
+		$this->asserter->assertNoRawHtmlTags( $xml );
+	}
+
+	/**
+	 * Test HTML with unicode characters and indentation converts correctly.
+	 */
+	public function test_docx_html_with_unicode_and_indentation_converts() {
+		$html = "<table>\n" .
+				"    <tr>\n" .
+				"        <td>Español: áéíóúñ</td>\n" .
+				"        <td>Symbols: €™©®</td>\n" .
+				"    </tr>\n" .
+				"    <tr>\n" .
+				"        <td>日本語テスト</td>\n" .
+				"        <td>Emoji: 🎉🚀</td>\n" .
+				"    </tr>\n" .
+				"</table>";
+
+		$type_data = $this->create_doc_type_with_template( 'nonmatching-field.docx' );
+		$post_id   = $this->create_document_with_data( $type_data['term_id'], array( 'datos' => $html ) );
+
+		$path = $this->generate_document( $post_id, 'docx' );
+		$xml  = $this->extract_document_xml( $path );
+
+		$this->assertNotFalse( $xml );
+		$this->assertStringContainsString( 'áéíóúñ', $xml );
+		$this->assertStringContainsString( '€', $xml );
+		$this->assertStringContainsString( 'w:tbl', $xml, 'Should have native table.' );
+		$this->asserter->assertNoRawHtmlTags( $xml );
+	}
+
+	/**
+	 * Test HTML with only whitespace between tags (empty content).
+	 */
+	public function test_docx_html_with_empty_cells_and_indentation_converts() {
+		$html = "<table>\n" .
+				"    <tr>\n" .
+				"        <td>Has content</td>\n" .
+				"        <td>   </td>\n" .
+				"        <td></td>\n" .
+				"    </tr>\n" .
+				"    <tr>\n" .
+				"        <td>\n" .
+				"        </td>\n" .
+				"        <td>Also has content</td>\n" .
+				"        <td>\t\t</td>\n" .
+				"    </tr>\n" .
+				"</table>";
+
+		$type_data = $this->create_doc_type_with_template( 'nonmatching-field.docx' );
+		$post_id   = $this->create_document_with_data( $type_data['term_id'], array( 'datos' => $html ) );
+
+		$path = $this->generate_document( $post_id, 'docx' );
+		$xml  = $this->extract_document_xml( $path );
+
+		$this->assertNotFalse( $xml );
+		$this->assertStringContainsString( 'Has content', $xml );
+		$this->assertStringContainsString( 'Also has content', $xml );
+		$this->assertStringContainsString( 'w:tbl', $xml, 'Should have native table.' );
+		$this->asserter->assertNoRawHtmlTags( $xml );
+	}
+
+	/**
+	 * Test ODT with extreme indentation edge case.
+	 */
+	public function test_odt_html_with_extreme_indentation_converts() {
+		// 20 spaces of indentation
+		$html = "<table>\n" .
+				"                    <tr>\n" .
+				"                    <td>Extreme indent</td>\n" .
+				"                    </tr>\n" .
+				"</table>";
+
+		$type_data = $this->create_doc_type_with_template( 'nonmatching-field.odt' );
+		$post_id   = $this->create_document_with_data( $type_data['term_id'], array( 'datos' => $html ) );
+
+		$path = $this->generate_document( $post_id, 'odt' );
+		$xml  = $this->extract_document_xml( $path );
+
+		$this->assertNotFalse( $xml );
+		$this->assertStringContainsString( 'Extreme indent', $xml );
+		$this->assertStringContainsString( 'table:table', $xml, 'Should have native table.' );
+		$this->asserter->assertNoRawHtmlTags( $xml );
+	}
+
+	/**
+	 * Test HTML that looks like what TinyMCE actually produces.
+	 * This is a real-world example with all the quirks.
+	 */
+	public function test_docx_real_tinymce_output_converts() {
+		$html = "<h3>Encabezado de prueba</h3>\n" .
+				"Primer p&aacute;rrafo con texto de ejemplo.\n" .
+				"\n" .
+				"Segundo p&aacute;rrafo con <strong>negritas</strong>, <em>cursivas</em> y <u>subrayado</u>.\n" .
+				"<ul>\n" .
+				"     <li>Elemento uno</li>\n" .
+				"     <li>Elemento dos</li>\n" .
+				"</ul>\n" .
+				"<table>\n" .
+				"<tbody>\n" .
+				"<tr>\n" .
+				"<th>Col 1</th>\n" .
+				"<th>Col 2</th>\n" .
+				"</tr>\n" .
+				"<tr>\n" .
+				"<td>Dato A1</td>\n" .
+				"<td>Dato A2</td>\n" .
+				"</tr>\n" .
+				"<tr>\n" .
+				"<td>Dato B1</td>\n" .
+				"<td>Dato B2</td>\n" .
+				"</tr>\n" .
+				"</tbody>\n" .
+				"</table>\n" .
+				"&nbsp;\n" .
+				"\n" .
+				"&nbsp;\n" .
+				"<table style=\"border-collapse: collapse;width: 100%\">\n" .
+				"<tbody>\n" .
+				"<tr>\n" .
+				"<td style=\"width: 33.3333%\">dfgsfg</td>\n" .
+				"<td style=\"width: 33.3333%\">dsfadsf</td>\n" .
+				"<td style=\"width: 33.3333%\">sdfasdf</td>\n" .
+				"</tr>\n" .
+				"<tr>\n" .
+				"<td style=\"width: 33.3333%\"></td>\n" .
+				"<td style=\"width: 33.3333%\"></td>\n" .
+				"<td style=\"width: 33.3333%\"></td>\n" .
+				"</tr>\n" .
+				"<tr>\n" .
+				"<td style=\"width: 33.3333%\"></td>\n" .
+				"<td style=\"width: 33.3333%\"></td>\n" .
+				"<td style=\"width: 33.3333%\"></td>\n" .
+				"</tr>\n" .
+				"</tbody>\n" .
+				"</table>\n" .
+				"&nbsp;";
+
+		$type_data = $this->create_doc_type_with_template( 'nonmatching-field.docx' );
+		$post_id   = $this->create_document_with_data( $type_data['term_id'], array( 'datos' => $html ) );
+
+		$path = $this->generate_document( $post_id, 'docx' );
+		$xml  = $this->extract_document_xml( $path );
+
+		$this->assertNotFalse( $xml );
+		$this->assertStringContainsString( 'Encabezado de prueba', $xml );
+		$this->assertStringContainsString( 'Elemento uno', $xml );
+		$this->assertStringContainsString( 'Elemento dos', $xml );
+		$this->assertStringContainsString( 'Dato A1', $xml );
+		$this->assertStringContainsString( 'dfgsfg', $xml );
+		$this->assertStringContainsString( 'w:tbl', $xml, 'Should have native table.' );
+		$this->asserter->assertNoRawHtmlTags( $xml );
+	}
 }

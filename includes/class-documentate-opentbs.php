@@ -281,6 +281,9 @@ class Documentate_OpenTBS {
 				// Decode HTML entities to match raw HTML.
 				$coalesced = html_entity_decode( $para_map['text'], ENT_QUOTES | ENT_XML1, 'UTF-8' );
 
+				// Normalize for matching (removes orphaned indentation spaces left by TBS).
+				$coalesced = self::normalize_for_html_matching( $coalesced );
+
 				// Debug: log paragraph text if it contains HTML-like content.
 				if ( defined( 'WP_DEBUG' ) && WP_DEBUG && false !== strpos( $coalesced, '<' ) ) {
 					$escaped = htmlspecialchars( substr( $coalesced, 0, 300 ), ENT_QUOTES, 'UTF-8' );
@@ -561,13 +564,57 @@ class Documentate_OpenTBS {
 
 		$modified      = false;
 		$style_require = array();
-		$nodes         = $xpath->query( '//text()' );
-		if ( $nodes instanceof DOMNodeList ) {
-			foreach ( $nodes as $node ) {
-				if ( ! $node instanceof DOMText ) {
+
+		// Process paragraph by paragraph to handle HTML split by text:line-break elements.
+		$paragraphs = $xpath->query( '//text:p' );
+		if ( $paragraphs instanceof DOMNodeList ) {
+			// Convert to array to avoid issues with DOM modification during iteration.
+			$para_array = array();
+			foreach ( $paragraphs as $para ) {
+				$para_array[] = $para;
+			}
+
+			foreach ( $para_array as $paragraph ) {
+				if ( ! $paragraph instanceof DOMElement ) {
 					continue;
 				}
-				$changed = self::replace_odt_text_node_html( $node, $lookup, $style_require );
+
+				// Collect all text nodes in the paragraph.
+				$text_nodes = array();
+				$coalesced  = '';
+				foreach ( $paragraph->childNodes as $child ) { // phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase
+					if ( $child instanceof DOMText ) {
+						$text_nodes[] = $child;
+						$coalesced   .= $child->wholeText; // phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase
+					}
+				}
+
+				if ( empty( $coalesced ) ) {
+					continue;
+				}
+
+				// Decode HTML entities and normalize newlines.
+				$coalesced = self::normalize_text_newlines( $coalesced );
+				$coalesced = html_entity_decode( $coalesced, ENT_QUOTES | ENT_XML1, 'UTF-8' );
+
+				// Normalize for matching (removes orphaned indentation spaces left by TBS).
+				$coalesced = self::normalize_for_html_matching( $coalesced );
+
+				// Check if there's an HTML match in the coalesced text.
+				$match = self::find_next_html_match( $coalesced, $lookup, 0 );
+				if ( false === $match ) {
+					// No match found; try individual text nodes for backward compatibility.
+					foreach ( $text_nodes as $node ) {
+						$changed = self::replace_odt_text_node_html( $node, $lookup, $style_require );
+						if ( $changed ) {
+							$modified = true;
+						}
+					}
+					continue;
+				}
+
+				// Found a match; process the entire paragraph's text content.
+				$changed = self::replace_odt_paragraph_html( $paragraph, $coalesced, $text_nodes, $lookup, $style_require, $doc );
 				if ( $changed ) {
 					$modified = true;
 				}
@@ -585,6 +632,91 @@ class Documentate_OpenTBS {
 	}
 
 	/**
+	 * Replace HTML fragments in a paragraph by processing coalesced text from all text nodes.
+	 *
+	 * This handles HTML that was split across multiple DOMText nodes by text:line-break elements.
+	 *
+	 * @param DOMElement           $paragraph     The paragraph element.
+	 * @param string               $coalesced     Coalesced and decoded text content.
+	 * @param array<int,DOMText>   $text_nodes    Array of text nodes in the paragraph.
+	 * @param array<string,string> $lookup        Rich text lookup table.
+	 * @param array<string,bool>   $style_require Styles required so far.
+	 * @param DOMDocument          $doc           The document.
+	 * @return bool
+	 */
+	private static function replace_odt_paragraph_html( DOMElement $paragraph, $coalesced, array $text_nodes, array $lookup, array &$style_require, DOMDocument $doc ) {
+		$position = 0;
+		$modified = false;
+		$nodes_to_insert = array();
+
+		while ( true ) {
+			$match = self::find_next_html_match( $coalesced, $lookup, $position );
+			if ( false === $match ) {
+				break;
+			}
+
+			list( $match_pos, $match_key, $match_raw ) = $match;
+
+			// Add text before match.
+			if ( $match_pos > $position ) {
+				$segment = substr( $coalesced, $position, $match_pos - $position );
+				if ( '' !== $segment ) {
+					$nodes_to_insert[] = $doc->createTextNode( $segment );
+				}
+			}
+
+			// Convert HTML to ODT nodes.
+			$html_nodes = self::build_odt_inline_nodes( $doc, $match_raw, $style_require );
+			foreach ( $html_nodes as $node ) {
+				$nodes_to_insert[] = $node;
+			}
+
+			$position = $match_pos + strlen( $match_key );
+			$modified = true;
+		}
+
+		if ( ! $modified ) {
+			return false;
+		}
+
+		// Add remaining text after last match.
+		$tail = substr( $coalesced, $position );
+		if ( '' !== $tail ) {
+			$nodes_to_insert[] = $doc->createTextNode( $tail );
+		}
+
+		// Remove all existing text nodes and line-break elements.
+		$children_to_remove = array();
+		foreach ( $paragraph->childNodes as $child ) { // phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase
+			if ( $child instanceof DOMText ) {
+				$children_to_remove[] = $child;
+			} elseif ( $child instanceof DOMElement && 'line-break' === $child->localName ) {
+				$children_to_remove[] = $child;
+			}
+		}
+		foreach ( $children_to_remove as $child ) {
+			$paragraph->removeChild( $child );
+		}
+
+		// Insert new nodes. Tables need to be inserted after the paragraph.
+		$parent = $paragraph->parentNode; // phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase
+		$next_sibling = $paragraph->nextSibling; // phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase
+
+		foreach ( $nodes_to_insert as $node ) {
+			if ( $node instanceof DOMElement && self::ODF_TABLE_NS === $node->namespaceURI && 'table' === $node->localName ) {
+				// Tables must be siblings of paragraphs, not children.
+				if ( $parent instanceof DOMNode ) {
+					$parent->insertBefore( $node, $next_sibling );
+				}
+			} else {
+				$paragraph->appendChild( $node );
+			}
+		}
+
+		return true;
+	}
+
+	/**
 	 * Replace HTML fragments inside a DOMText node with formatted ODT nodes.
 	 *
 	 * @param DOMText              $text_node     Text node to inspect.
@@ -596,6 +728,8 @@ class Documentate_OpenTBS {
 		$value  = self::normalize_text_newlines( $text_node->wholeText ); // phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase
 		// Decode HTML entities so we can match raw HTML fragments like <table> inside text nodes that contain &lt;table&gt;.
 		$value  = html_entity_decode( $value, ENT_QUOTES | ENT_XML1, 'UTF-8' );
+		// Normalize for matching (removes orphaned indentation spaces left by TBS).
+		$value  = self::normalize_for_html_matching( $value );
 		$doc    = $text_node->ownerDocument;
 		$parent = $text_node->parentNode; // phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase
 		if ( ! $doc || ! $parent ) {
@@ -1047,6 +1181,26 @@ class Documentate_OpenTBS {
 	}
 
 	/**
+	 * Normalize text for HTML matching by removing newlines and excess whitespace.
+	 *
+	 * TBS converts newlines to <w:br/> elements which are excluded when coalescing text,
+	 * but leaves indentation spaces intact. This function ensures both lookup and document
+	 * text are normalized the same way for matching.
+	 *
+	 * @param string $text Text to normalize.
+	 * @return string Normalized text.
+	 */
+	private static function normalize_for_html_matching( $text ) {
+		// 1. Remove all newlines (TBS already removes them from document via <w:br/>).
+		$text = preg_replace( '/[\r\n]+/', '', $text );
+		// 2. Collapse multiple spaces to one.
+		$text = preg_replace( '/\s{2,}/', ' ', $text );
+		// 3. Remove spaces between tags.
+		$text = preg_replace( '/>\s+</', '><', $text );
+		return trim( $text );
+	}
+
+	/**
 	 * Collapse whitespace around HTML tags to enable matching when TBS strips newlines.
 	 *
 	 * When TBS places HTML with newlines into a document, it converts them to <w:br/>
@@ -1057,14 +1211,7 @@ class Documentate_OpenTBS {
 	 * @return string HTML with whitespace around tags collapsed.
 	 */
 	private static function collapse_html_whitespace( $html ) {
-		// Remove whitespace between > and <
-		$collapsed = preg_replace( '/>\s+</', '><', $html );
-		// Remove whitespace before < (after text content).
-		$collapsed = preg_replace( '/\s+</', '<', $collapsed );
-		// Remove whitespace after > (before text content).
-		$collapsed = preg_replace( '/>\s+/', '>', $collapsed );
-		// Trim leading/trailing whitespace.
-		return trim( $collapsed );
+		return self::normalize_for_html_matching( $html );
 	}
 
 	/**
