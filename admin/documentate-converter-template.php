@@ -13,7 +13,7 @@
 // which handles headers, permission checks, and nonce validation.
 
 // Get conversion parameters from the validated request.
-$post_id       = isset( $_GET['post_id'] ) ? absint( $_GET['post_id'] ) : 0;
+$document_id   = isset( $_GET['post_id'] ) ? absint( $_GET['post_id'] ) : 0;
 $target_format = isset( $_GET['format'] ) ? sanitize_key( $_GET['format'] ) : 'pdf';
 $source_format = isset( $_GET['source'] ) ? sanitize_key( $_GET['source'] ) : 'odt';
 $output_action = isset( $_GET['output'] ) ? sanitize_key( $_GET['output'] ) : 'preview';
@@ -90,7 +90,7 @@ $thread_url = plugins_url( 'admin/vendor/zetajs/converterThread.js', DOCUMENTATE
 	<script type="module">
 		// Conversion parameters from URL (validated by PHP).
 		const conversionConfig = {
-			postId: <?php echo (int) $post_id; ?>,
+			postId: <?php echo (int) $document_id; ?>,
 			targetFormat: <?php echo wp_json_encode( $target_format ); ?>,
 			sourceFormat: <?php echo wp_json_encode( $source_format ); ?>,
 			outputAction: <?php echo wp_json_encode( $output_action ); ?>,
