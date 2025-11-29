@@ -62,6 +62,7 @@ jobs:
               repo: context.repo.repo,
               ref: context.payload.pull_request ? context.payload.pull_request.head.ref : context.ref,
               environment: "playground",
+              required_contexts: [],
               transient_environment: true,
               auto_merge: false,
               description: "WordPress Playground Deployment"
