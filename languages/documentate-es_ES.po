@@ -810,3 +810,20 @@ msgstr "palabra1, palabra2"
 
 msgid "Comma-separated list."
 msgstr "Lista separada por comas."
+
+msgid "Unassigned"
+msgstr "Sin asignar"
+
+#. translators: %s: plugin version number.
+#, php-format
+msgid "You are adding sample data to a non-development version of Documentate (v%s)"
+msgstr "Estás añadiendo datos de ejemplo a una versión no de desarrollo de Documentate (v%s)"
+
+msgid "Do you want to continue?"
+msgstr "¿Deseas continuar?"
+
+msgid "Starting sample data creation..."
+msgstr "Iniciando creación de datos de ejemplo..."
+
+msgid "Sample data created successfully!"
+msgstr "¡Datos de ejemplo creados correctamente!"
