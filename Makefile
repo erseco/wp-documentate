@@ -111,7 +111,7 @@ test-verbose: start-if-not-running
 # If coverage shows 0%, restart wp-env with the --xdebug=coverage flag.
 test-coverage: start-if-not-running
 	@mkdir -p artifacts/coverage
-	@CMD="env XDEBUG_MODE=coverage ./vendor/bin/phpunit --testdox --colors=always --coverage-text=artifacts/coverage/coverage.txt --coverage-html artifacts/coverage/html --coverage-clover artifacts/coverage/clover.xml"; \
+	@CMD="env XDEBUG_MODE=coverage ./vendor/bin/paratest -p 4 --testdox --colors=always --coverage-text=artifacts/coverage/coverage.txt --coverage-html artifacts/coverage/html --coverage-clover artifacts/coverage/clover.xml"; \
 	if [ -n "$(FILE)" ]; then CMD="$$CMD $(FILE)"; fi; \
 	if [ -n "$(FILTER)" ]; then CMD="$$CMD --filter $(FILTER)"; fi; \
 	npx wp-env run tests-cli --env-cwd=wp-content/plugins/documentate $$CMD; \
