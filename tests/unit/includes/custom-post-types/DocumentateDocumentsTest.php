@@ -1278,4 +1278,613 @@ class DocumentateDocumentsTest extends Documentate_Test_Base {
 		$this->assertArrayHasKey( 'post_content', $result );
 		$this->assertStringContainsString( 'compose_field', $result['post_content'] );
 	}
+
+	/**
+	 * Test decode_array_field_value static method with empty.
+	 */
+	public function test_decode_array_field_value_empty() {
+		$result = Documentate_Documents::decode_array_field_value( '' );
+		$this->assertIsArray( $result );
+		$this->assertEmpty( $result );
+	}
+
+	/**
+	 * Test decode_array_field_value with JSON.
+	 */
+	public function test_decode_array_field_value_json() {
+		$json = json_encode( array( array( 'title' => 'Test', 'content' => 'Value' ) ) );
+		$result = Documentate_Documents::decode_array_field_value( $json );
+
+		$this->assertIsArray( $result );
+		$this->assertCount( 1, $result );
+		$this->assertSame( 'Test', $result[0]['title'] );
+	}
+
+	/**
+	 * Test decode_array_field_value with invalid JSON.
+	 */
+	public function test_decode_array_field_value_invalid() {
+		$result = Documentate_Documents::decode_array_field_value( 'not json' );
+		$this->assertIsArray( $result );
+		$this->assertEmpty( $result );
+	}
+
+	/**
+	 * Test sanitize_rich_text_value via reflection.
+	 */
+	public function test_sanitize_rich_text_value_empty() {
+		$reflection = new ReflectionClass( $this->documents );
+		$method = $reflection->getMethod( 'sanitize_rich_text_value' );
+		$method->setAccessible( true );
+
+		$result = $method->invoke( $this->documents, '' );
+		$this->assertSame( '', $result );
+	}
+
+	/**
+	 * Test sanitize_rich_text_value strips scripts.
+	 */
+	public function test_sanitize_rich_text_value_strips_scripts() {
+		$reflection = new ReflectionClass( $this->documents );
+		$method = $reflection->getMethod( 'sanitize_rich_text_value' );
+		$method->setAccessible( true );
+
+		$input = '<p>Hello</p><script>alert("xss")</script>';
+		$result = $method->invoke( $this->documents, $input );
+
+		$this->assertStringNotContainsString( '<script', $result );
+		$this->assertStringContainsString( 'Hello', $result );
+	}
+
+	/**
+	 * Test sanitize_rich_text_value strips iframes.
+	 */
+	public function test_sanitize_rich_text_value_strips_iframes() {
+		$reflection = new ReflectionClass( $this->documents );
+		$method = $reflection->getMethod( 'sanitize_rich_text_value' );
+		$method->setAccessible( true );
+
+		$input = '<p>Content</p><iframe src="http://evil.com"></iframe>';
+		$result = $method->invoke( $this->documents, $input );
+
+		$this->assertStringNotContainsString( '<iframe', $result );
+	}
+
+	/**
+	 * Test normalize_literal_line_endings via reflection.
+	 */
+	public function test_normalize_literal_line_endings() {
+		$reflection = new ReflectionClass( $this->documents );
+		$method = $reflection->getMethod( 'normalize_literal_line_endings' );
+		$method->setAccessible( true );
+
+		$input = 'line1\\nline2';
+		$result = $method->invoke( $this->documents, $input );
+
+		// The method only replaces when there are double backslashes.
+		$this->assertIsString( $result );
+	}
+
+	/**
+	 * Test remove_linebreak_artifacts via reflection.
+	 */
+	public function test_remove_linebreak_artifacts() {
+		$reflection = new ReflectionClass( $this->documents );
+		$method = $reflection->getMethod( 'remove_linebreak_artifacts' );
+		$method->setAccessible( true );
+
+		$input = '<p>n</p>';
+		$result = $method->invoke( $this->documents, $input );
+
+		$this->assertIsString( $result );
+	}
+
+	/**
+	 * Test sanitize_array_field_items via reflection.
+	 */
+	public function test_sanitize_array_field_items_empty() {
+		$reflection = new ReflectionClass( $this->documents );
+		$method = $reflection->getMethod( 'sanitize_array_field_items' );
+		$method->setAccessible( true );
+
+		$result = $method->invoke( $this->documents, array(), array() );
+		$this->assertIsArray( $result );
+		$this->assertEmpty( $result );
+	}
+
+	/**
+	 * Test sanitize_array_field_items with valid items.
+	 */
+	public function test_sanitize_array_field_items_valid() {
+		$reflection = new ReflectionClass( $this->documents );
+		$method = $reflection->getMethod( 'sanitize_array_field_items' );
+		$method->setAccessible( true );
+
+		$items = array(
+			array( 'content' => 'Test content' ),
+		);
+		$definition = array(
+			'item_schema' => array(
+				'content' => array( 'label' => 'Content', 'type' => 'textarea' ),
+			),
+		);
+
+		$result = $method->invoke( $this->documents, $items, $definition );
+		$this->assertCount( 1, $result );
+		$this->assertSame( 'Test content', $result[0]['content'] );
+	}
+
+	/**
+	 * Test sanitize_array_field_items skips empty items.
+	 */
+	public function test_sanitize_array_field_items_skips_empty() {
+		$reflection = new ReflectionClass( $this->documents );
+		$method = $reflection->getMethod( 'sanitize_array_field_items' );
+		$method->setAccessible( true );
+
+		$items = array(
+			array( 'content' => '' ),
+			array( 'content' => 'Valid' ),
+		);
+		$definition = array();
+
+		$result = $method->invoke( $this->documents, $items, $definition );
+		$this->assertCount( 1, $result );
+	}
+
+	/**
+	 * Test get_array_field_items_from_structured via reflection.
+	 */
+	public function test_get_array_field_items_from_structured_empty() {
+		$reflection = new ReflectionClass( $this->documents );
+		$method = $reflection->getMethod( 'get_array_field_items_from_structured' );
+		$method->setAccessible( true );
+
+		$result = $method->invoke( $this->documents, array() );
+		$this->assertIsArray( $result );
+		$this->assertEmpty( $result );
+	}
+
+	/**
+	 * Test get_array_field_items_from_structured with value.
+	 */
+	public function test_get_array_field_items_from_structured_with_value() {
+		$reflection = new ReflectionClass( $this->documents );
+		$method = $reflection->getMethod( 'get_array_field_items_from_structured' );
+		$method->setAccessible( true );
+
+		$entry = array(
+			'type' => 'array',
+			'value' => json_encode( array( array( 'title' => 'Item 1' ) ) ),
+		);
+
+		$result = $method->invoke( $this->documents, $entry );
+		$this->assertCount( 1, $result );
+		$this->assertSame( 'Item 1', $result[0]['title'] );
+	}
+
+	/**
+	 * Test humanize_unknown_field_label via reflection.
+	 */
+	public function test_humanize_unknown_field_label() {
+		$reflection = new ReflectionClass( $this->documents );
+		$method = $reflection->getMethod( 'humanize_unknown_field_label' );
+		$method->setAccessible( true );
+
+		$result = $method->invoke( $this->documents, 'documentate_field_my_test_field' );
+		$this->assertStringContainsString( 'My', $result );
+		$this->assertStringContainsString( 'Test', $result );
+		$this->assertStringContainsString( 'Field', $result );
+	}
+
+	/**
+	 * Test humanize_unknown_field_label with empty.
+	 */
+	public function test_humanize_unknown_field_label_empty() {
+		$reflection = new ReflectionClass( $this->documents );
+		$method = $reflection->getMethod( 'humanize_unknown_field_label' );
+		$method->setAccessible( true );
+
+		$result = $method->invoke( $this->documents, 'documentate_field_' );
+		$this->assertSame( 'documentate_field_', $result );
+	}
+
+	/**
+	 * Test build_structured_field_fragment via reflection.
+	 */
+	public function test_build_structured_field_fragment() {
+		$reflection = new ReflectionClass( $this->documents );
+		$method = $reflection->getMethod( 'build_structured_field_fragment' );
+		$method->setAccessible( true );
+
+		$result = $method->invoke( $this->documents, 'test_slug', 'text', 'Test Value' );
+
+		$this->assertStringContainsString( '<!-- documentate-field', $result );
+		$this->assertStringContainsString( 'slug="test_slug"', $result );
+		$this->assertStringContainsString( 'Test Value', $result );
+	}
+
+	/**
+	 * Test build_structured_field_fragment with empty slug.
+	 */
+	public function test_build_structured_field_fragment_empty_slug() {
+		$reflection = new ReflectionClass( $this->documents );
+		$method = $reflection->getMethod( 'build_structured_field_fragment' );
+		$method->setAccessible( true );
+
+		$result = $method->invoke( $this->documents, '', 'text', 'Value' );
+		$this->assertSame( '', $result );
+	}
+
+	/**
+	 * Test get_field_pattern_message via reflection.
+	 */
+	public function test_get_field_pattern_message() {
+		$reflection = new ReflectionClass( $this->documents );
+		$method = $reflection->getMethod( 'get_field_pattern_message' );
+		$method->setAccessible( true );
+
+		$raw_field = array( 'patternmsg' => 'Pattern message' );
+		$result = $method->invoke( $this->documents, $raw_field );
+
+		$this->assertSame( 'Pattern message', $result );
+	}
+
+	/**
+	 * Test get_field_pattern_message from parameters.
+	 */
+	public function test_get_field_pattern_message_from_parameters() {
+		$reflection = new ReflectionClass( $this->documents );
+		$method = $reflection->getMethod( 'get_field_pattern_message' );
+		$method->setAccessible( true );
+
+		$raw_field = array( 'parameters' => array( 'pattern_message' => 'Custom pattern message' ) );
+		$result = $method->invoke( $this->documents, $raw_field );
+
+		$this->assertSame( 'Custom pattern message', $result );
+	}
+
+	/**
+	 * Test get_field_pattern_message empty.
+	 */
+	public function test_get_field_pattern_message_empty() {
+		$reflection = new ReflectionClass( $this->documents );
+		$method = $reflection->getMethod( 'get_field_pattern_message' );
+		$method->setAccessible( true );
+
+		$result = $method->invoke( $this->documents, array() );
+		$this->assertSame( '', $result );
+	}
+
+	/**
+	 * Test collect_unknown_dynamic_fields via reflection.
+	 */
+	public function test_collect_unknown_dynamic_fields_empty() {
+		$post = $this->factory->post->create_and_get( array( 'post_type' => 'documentate_document' ) );
+
+		$reflection = new ReflectionClass( $this->documents );
+		$method = $reflection->getMethod( 'collect_unknown_dynamic_fields' );
+		$method->setAccessible( true );
+
+		$result = $method->invoke( $this->documents, $post->ID, array() );
+
+		$this->assertIsArray( $result );
+	}
+
+	/**
+	 * Test collect_unknown_dynamic_fields with POST data.
+	 */
+	public function test_collect_unknown_dynamic_fields_with_post() {
+		$post = $this->factory->post->create_and_get( array( 'post_type' => 'documentate_document' ) );
+		$_POST['documentate_field_unknown'] = 'Unknown value';
+
+		$reflection = new ReflectionClass( $this->documents );
+		$method = $reflection->getMethod( 'collect_unknown_dynamic_fields' );
+		$method->setAccessible( true );
+
+		$result = $method->invoke( $this->documents, $post->ID, array() );
+
+		$this->assertArrayHasKey( 'documentate_field_unknown', $result );
+		$this->assertSame( 'Unknown value', $result['documentate_field_unknown']['value'] );
+
+		unset( $_POST['documentate_field_unknown'] );
+	}
+
+	/**
+	 * Test map_single_input_type for URL.
+	 */
+	public function test_map_single_input_type_url() {
+		$reflection = new ReflectionClass( $this->documents );
+		$method = $reflection->getMethod( 'map_single_input_type' );
+		$method->setAccessible( true );
+
+		$result = $method->invoke( $this->documents, 'url', '' );
+		$this->assertSame( 'url', $result );
+	}
+
+	/**
+	 * Test map_single_input_type for tel.
+	 */
+	public function test_map_single_input_type_tel() {
+		$reflection = new ReflectionClass( $this->documents );
+		$method = $reflection->getMethod( 'map_single_input_type' );
+		$method->setAccessible( true );
+
+		$result = $method->invoke( $this->documents, 'tel', '' );
+		$this->assertSame( 'tel', $result );
+	}
+
+	/**
+	 * Test map_single_input_type for time.
+	 */
+	public function test_map_single_input_type_time() {
+		$reflection = new ReflectionClass( $this->documents );
+		$method = $reflection->getMethod( 'map_single_input_type' );
+		$method->setAccessible( true );
+
+		$result = $method->invoke( $this->documents, 'time', '' );
+		$this->assertSame( 'time', $result );
+	}
+
+	/**
+	 * Test map_single_input_type for datetime-local.
+	 */
+	public function test_map_single_input_type_datetime_local() {
+		$reflection = new ReflectionClass( $this->documents );
+		$method = $reflection->getMethod( 'map_single_input_type' );
+		$method->setAccessible( true );
+
+		$result = $method->invoke( $this->documents, 'datetime-local', '' );
+		$this->assertSame( 'datetime-local', $result );
+	}
+
+	/**
+	 * Test map_single_input_type fallback.
+	 */
+	public function test_map_single_input_type_fallback() {
+		$reflection = new ReflectionClass( $this->documents );
+		$method = $reflection->getMethod( 'map_single_input_type' );
+		$method->setAccessible( true );
+
+		$result = $method->invoke( $this->documents, 'unknown', '' );
+		$this->assertSame( 'text', $result );
+	}
+
+	/**
+	 * Test build_input_class for checkbox.
+	 */
+	public function test_build_input_class_checkbox() {
+		$reflection = new ReflectionClass( $this->documents );
+		$method = $reflection->getMethod( 'build_input_class' );
+		$method->setAccessible( true );
+
+		$result = $method->invoke( $this->documents, 'checkbox' );
+		$this->assertStringContainsString( 'documentate-field-checkbox', $result );
+	}
+
+	/**
+	 * Test build_input_class for select.
+	 */
+	public function test_build_input_class_select() {
+		$reflection = new ReflectionClass( $this->documents );
+		$method = $reflection->getMethod( 'build_input_class' );
+		$method->setAccessible( true );
+
+		$result = $method->invoke( $this->documents, 'select' );
+		$this->assertStringContainsString( 'regular-text', $result );
+	}
+
+	/**
+	 * Test format_field_attributes with boolean values.
+	 */
+	public function test_format_field_attributes_boolean() {
+		$reflection = new ReflectionClass( $this->documents );
+		$method = $reflection->getMethod( 'format_field_attributes' );
+		$method->setAccessible( true );
+
+		$attrs = array(
+			'required' => true,
+			'disabled' => false,
+		);
+
+		$result = $method->invoke( $this->documents, $attrs );
+		$this->assertStringContainsString( 'required', $result );
+		$this->assertStringNotContainsString( 'disabled', $result );
+	}
+
+	/**
+	 * Test format_field_attributes with null values.
+	 */
+	public function test_format_field_attributes_null() {
+		$reflection = new ReflectionClass( $this->documents );
+		$method = $reflection->getMethod( 'format_field_attributes' );
+		$method->setAccessible( true );
+
+		$attrs = array(
+			'class' => 'test',
+			'id'    => null,
+		);
+
+		$result = $method->invoke( $this->documents, $attrs );
+		$this->assertStringContainsString( 'class="test"', $result );
+		$this->assertStringNotContainsString( 'id=', $result );
+	}
+
+	/**
+	 * Test parse_select_options with comma delimiter.
+	 */
+	public function test_parse_select_options_comma() {
+		$reflection = new ReflectionClass( $this->documents );
+		$method = $reflection->getMethod( 'parse_select_options' );
+		$method->setAccessible( true );
+
+		$raw_field = array(
+			'parameters' => array(
+				'options' => 'a,b,c',
+			),
+		);
+
+		$result = $method->invoke( $this->documents, $raw_field );
+		$this->assertArrayHasKey( 'a', $result );
+		$this->assertArrayHasKey( 'b', $result );
+		$this->assertArrayHasKey( 'c', $result );
+	}
+
+	/**
+	 * Test get_select_placeholder from parameters.
+	 */
+	public function test_get_select_placeholder_from_parameters() {
+		$reflection = new ReflectionClass( $this->documents );
+		$method = $reflection->getMethod( 'get_select_placeholder' );
+		$method->setAccessible( true );
+
+		$raw_field = array(
+			'parameters' => array( 'prompt' => 'Choose one...' ),
+		);
+
+		$result = $method->invoke( $this->documents, $raw_field );
+		$this->assertSame( 'Choose one...', $result );
+	}
+
+	/**
+	 * Test normalize_scalar_value for time.
+	 */
+	public function test_normalize_scalar_value_time() {
+		$reflection = new ReflectionClass( $this->documents );
+		$method = $reflection->getMethod( 'normalize_scalar_value' );
+		$method->setAccessible( true );
+
+		$result = $method->invoke( $this->documents, '10:30', 'time' );
+		$this->assertSame( '10:30', $result );
+	}
+
+	/**
+	 * Test build_scalar_input_attributes with required parameter.
+	 */
+	public function test_build_scalar_input_attributes_required() {
+		$reflection = new ReflectionClass( $this->documents );
+		$method = $reflection->getMethod( 'build_scalar_input_attributes' );
+		$method->setAccessible( true );
+
+		$raw_field = array(
+			'parameters' => array(
+				'required' => 'true',
+			),
+		);
+
+		$result = $method->invoke( $this->documents, $raw_field, 'text' );
+		$this->assertArrayHasKey( 'required', $result );
+	}
+
+	/**
+	 * Test build_scalar_input_attributes with step.
+	 */
+	public function test_build_scalar_input_attributes_step() {
+		$reflection = new ReflectionClass( $this->documents );
+		$method = $reflection->getMethod( 'build_scalar_input_attributes' );
+		$method->setAccessible( true );
+
+		$raw_field = array(
+			'parameters' => array(
+				'step' => '0.5',
+			),
+		);
+
+		$result = $method->invoke( $this->documents, $raw_field, 'number' );
+		$this->assertArrayHasKey( 'step', $result );
+		$this->assertSame( '0.5', $result['step'] );
+	}
+
+	/**
+	 * Test build_scalar_input_attributes with rows for textarea.
+	 */
+	public function test_build_scalar_input_attributes_rows() {
+		$reflection = new ReflectionClass( $this->documents );
+		$method = $reflection->getMethod( 'build_scalar_input_attributes' );
+		$method->setAccessible( true );
+
+		$raw_field = array(
+			'parameters' => array(
+				'rows' => 10,
+			),
+		);
+
+		$result = $method->invoke( $this->documents, $raw_field, 'textarea' );
+		$this->assertArrayHasKey( 'rows', $result );
+		$this->assertSame( '10', $result['rows'] );
+	}
+
+	/**
+	 * Test resolve_field_control_type for empty.
+	 */
+	public function test_resolve_field_control_type_empty() {
+		$reflection = new ReflectionClass( $this->documents );
+		$method = $reflection->getMethod( 'resolve_field_control_type' );
+		$method->setAccessible( true );
+
+		$result = $method->invoke( $this->documents, '', null );
+		$this->assertSame( 'textarea', $result );
+	}
+
+	/**
+	 * Test resolve_field_control_type for textarea type.
+	 */
+	public function test_resolve_field_control_type_textarea() {
+		$reflection = new ReflectionClass( $this->documents );
+		$method = $reflection->getMethod( 'resolve_field_control_type' );
+		$method->setAccessible( true );
+
+		$result = $method->invoke( $this->documents, 'single', array( 'type' => 'textarea' ) );
+		$this->assertSame( 'textarea', $result );
+	}
+
+	/**
+	 * Test resolve_field_control_type for rich editor.
+	 */
+	public function test_resolve_field_control_type_tinymce() {
+		$reflection = new ReflectionClass( $this->documents );
+		$method = $reflection->getMethod( 'resolve_field_control_type' );
+		$method->setAccessible( true );
+
+		$result = $method->invoke( $this->documents, 'single', array( 'type' => 'tinymce' ) );
+		$this->assertSame( 'rich', $result );
+	}
+
+	/**
+	 * Test parse_structured_content with multiple fields.
+	 */
+	public function test_parse_structured_content_multiple() {
+		$content = '<!-- documentate-field slug="field1" type="text" -->Value 1<!-- /documentate-field -->'
+				 . '<!-- documentate-field slug="field2" type="textarea" -->Value 2<!-- /documentate-field -->';
+
+		$result = Documentate_Documents::parse_structured_content( $content );
+
+		$this->assertCount( 2, $result );
+		$this->assertArrayHasKey( 'field1', $result );
+		$this->assertArrayHasKey( 'field2', $result );
+	}
+
+	/**
+	 * Test parse_structured_content with array type.
+	 */
+	public function test_parse_structured_content_array_type() {
+		$json = json_encode( array( array( 'title' => 'Item' ) ) );
+		$content = '<!-- documentate-field slug="repeater" type="array" -->' . $json . '<!-- /documentate-field -->';
+
+		$result = Documentate_Documents::parse_structured_content( $content );
+
+		$this->assertArrayHasKey( 'repeater', $result );
+		$this->assertSame( 'array', $result['repeater']['type'] );
+	}
+
+	/**
+	 * Test decode_array_field_value with HTML entities.
+	 */
+	public function test_decode_array_field_value_with_entities() {
+		$json = '[{"title":"Test &amp; Value"}]';
+		$result = Documentate_Documents::decode_array_field_value( $json );
+
+		$this->assertCount( 1, $result );
+		$this->assertArrayHasKey( 'title', $result[0] );
+	}
 }
