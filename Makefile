@@ -105,6 +105,12 @@ test-verbose: start-if-not-running
 	CMD="$$CMD --debug --verbose"; \
 	npx wp-env run tests-cli --env-cwd=wp-content/plugins/documentate $$CMD --colors=always
 
+test-coverage: start-if-not-running
+	@CMD="env XDEBUG_MODE=coverage ./vendor/bin/phpunit --testdox --colors=always --coverage-text --coverage-html artifacts/coverage/html --coverage-clover artifacts/coverage/clover.xml --coverage-filter=admin --coverage-filter=includes --coverage-filter=public --coverage-filter=documentate.php --coverage-filter=uninstall.php"; \
+	if [ -n "$(FILE)" ]; then CMD="$$CMD $(FILE)"; fi; \
+	if [ -n "$(FILTER)" ]; then CMD="$$CMD --filter $(FILTER)"; fi; \
+	npx wp-env run tests-cli --env-cwd=wp-content/plugins/documentate $$CMD
+
 # Ensure tests environment has admin user and plugin active
 setup-tests-env:
 	@echo "Setting up tests environment..."
@@ -271,6 +277,7 @@ help:
 	@echo "                         make test FILE=tests/MyTest.php"
 	@echo "                         make test FILE=tests/MyTest.php FILTER=test_my_feature"
 	@echo "  test-generation    - Run document generation tests only"
+	@echo "  test-coverage      - Run PHPUnit with coverage (reports in artifacts/coverage)"
 	@echo ""
 	@echo "  test-e2e           - Run E2E tests (non-interactive)"
 	@echo "  test-e2e-visual    - Run E2E tests with visual test UI"

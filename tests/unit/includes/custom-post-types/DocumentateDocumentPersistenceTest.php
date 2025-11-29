@@ -79,7 +79,7 @@ class DocumentateDocumentPersistenceTest extends WP_UnitTestCase {
 		$this->assertStringContainsString( '<ul>', $stored_body );
 		$this->assertStringContainsString( '<ol>', $stored_body );
 		$this->assertStringContainsString( '<table>', $stored_body );
-		$this->assertStringNotContainsString( '<script', $stored_body, 'El contenido HTML debe limpiarse de scripts.' );
+		$this->assertStringNotContainsString( '<script', $stored_body, 'HTML content must be cleaned of scripts.' );
 
 		$structured = Documentate_Documents::parse_structured_content( get_post_field( 'post_content', $post_id ) );
 		$this->assertArrayHasKey( 'nombre', $structured );
@@ -142,8 +142,8 @@ class DocumentateDocumentPersistenceTest extends WP_UnitTestCase {
 		$this->assertSame( sanitize_text_field( $updated_values['email'] ), get_post_meta( $post_id, 'documentate_field_email', true ) );
 		$this->assertSame( sanitize_text_field( $updated_values['telefono'] ), get_post_meta( $post_id, 'documentate_field_telefono', true ) );
 
-		$this->assertStringContainsString( '<h3>Bloque actualizado</h3>', $structured['cuerpo']['value'], 'El HTML debe reflejar el contenido actualizado.' );
-		$this->assertStringNotContainsString( 'Bloque original', $structured['cuerpo']['value'], 'El contenido anterior no debe persistir tras la actualización.' );
+		$this->assertStringContainsString( '<h3>Bloque actualizado</h3>', $structured['cuerpo']['value'], 'HTML must reflect the updated content.' );
+		$this->assertStringNotContainsString( 'Bloque original', $structured['cuerpo']['value'], 'Previous content must not persist after update.' );
 		$this->assertSame( get_post_meta( $post_id, 'documentate_field_cuerpo', true ), $structured['cuerpo']['value'] );
 	}
 
@@ -190,20 +190,20 @@ class DocumentateDocumentPersistenceTest extends WP_UnitTestCase {
 			'documentate_field_anexos'
 		) );
 
-		$this->assertNotSame( '', $meta_value, 'El meta JSON del repetidor no debe estar vacío tras el guardado inicial.' );
-		$this->assertNotNull( $meta_value, 'El meta debe existir en la base de datos.' );
+		$this->assertNotSame( '', $meta_value, 'Repeater JSON meta must not be empty after initial save.' );
+		$this->assertNotNull( $meta_value, 'Meta must exist in the database.' );
 
 		// Use the same decoding method that the production code uses.
 		$decoded_meta = Documentate_Documents::decode_array_field_value( $meta_value );
-		$this->assertIsArray( $decoded_meta, 'El meta JSON debe decodificar a un array.' );
-		$this->assertCount( 4, $decoded_meta, 'Debe persistirse la colección completa de anexos.' );
+		$this->assertIsArray( $decoded_meta, 'JSON meta must decode to an array.' );
+		$this->assertCount( 4, $decoded_meta, 'Complete annexes collection must persist.' );
 
-		$this->assertSame( array( '1', '2', '3', '4' ), array_column( $decoded_meta, 'numero' ), 'El orden inicial de anexos debe conservarse.' );
+		$this->assertSame( array( '1', '2', '3', '4' ), array_column( $decoded_meta, 'numero' ), 'Initial order of annexes must be preserved.' );
 
 		foreach ( $decoded_meta as $item ) {
-			$this->assertStringContainsString( '<table>', $item['contenido'], 'Cada anexo debe conservar las tablas HTML.' );
+			$this->assertStringContainsString( '<table>', $item['contenido'], 'Each annex must preserve HTML tables.' );
 			$this->assertStringContainsString( '<ul>', $item['contenido'] );
-			$this->assertStringNotContainsString( '<script', $item['contenido'], 'Los scripts deben eliminarse del contenido repetible.' );
+			$this->assertStringNotContainsString( '<script', $item['contenido'], 'Scripts must be removed from repeater content.' );
 		}
 
 		$structured = Documentate_Documents::parse_structured_content( get_post_field( 'post_content', $post_id ) );
@@ -213,7 +213,7 @@ class DocumentateDocumentPersistenceTest extends WP_UnitTestCase {
 		$structured_items = Documentate_Documents::decode_array_field_value( $structured['anexos']['value'] );
 		$this->assertIsArray( $structured_items );
 		$this->assertCount( 4, $structured_items );
-		$this->assertSame( $decoded_meta, $structured_items, 'El contenido estructurado y el meta JSON deben coincidir.' );
+		$this->assertSame( $decoded_meta, $structured_items, 'Structured content and JSON meta must match.' );
 
 		$updated_tpl_fields = array(
 			'anexos' => array(
@@ -251,16 +251,16 @@ class DocumentateDocumentPersistenceTest extends WP_UnitTestCase {
 		) );
 		$decoded_after_update = Documentate_Documents::decode_array_field_value( $meta_after_update );
 		$this->assertIsArray( $decoded_after_update );
-		$this->assertCount( 3, $decoded_after_update, 'El elemento retirado no debe persistir tras la reordenación.' );
-		$this->assertSame( array( '3', '1', '4' ), array_column( $decoded_after_update, 'numero' ), 'El orden actualizado debe coincidir con el nuevo payload.' );
+		$this->assertCount( 3, $decoded_after_update, 'Removed element must not persist after reordering.' );
+		$this->assertSame( array( '3', '1', '4' ), array_column( $decoded_after_update, 'numero' ), 'Updated order must match the new payload.' );
 
-		$this->assertStringContainsString( 'Anexo 3 - Revisión', $decoded_after_update[0]['contenido'], 'El primer anexo debe reflejar los cambios de contenido.' );
-		$this->assertStringNotContainsString( 'Anexo 2', $meta_after_update, 'El anexo eliminado no debe quedar en el JSON final.' );
+		$this->assertStringContainsString( 'Anexo 3 - Revisión', $decoded_after_update[0]['contenido'], 'First annex must reflect content changes.' );
+		$this->assertStringNotContainsString( 'Anexo 2', $meta_after_update, 'Deleted annex must not remain in final JSON.' );
 
 		$structured_after_update = Documentate_Documents::parse_structured_content( get_post_field( 'post_content', $post_id ) );
 		$items_after_update      = Documentate_Documents::decode_array_field_value( $structured_after_update['anexos']['value'] );
 		$this->assertIsArray( $items_after_update );
-		$this->assertSame( $decoded_after_update, $items_after_update, 'El contenido estructurado debe reflejar el nuevo orden y contenido.' );
+		$this->assertSame( $decoded_after_update, $items_after_update, 'Structured content must reflect the new order and content.' );
 	}
 
 	/**
@@ -270,7 +270,7 @@ class DocumentateDocumentPersistenceTest extends WP_UnitTestCase {
 	 */
 	private function create_scalar_document_type() {
 		$term = wp_insert_term( 'Tipo Scalar ' . uniqid(), 'documentate_doc_type' );
-		$this->assertNotWPError( $term, 'La creación del término de tipo scalar debe completarse.' );
+		$this->assertNotWPError( $term, 'Scalar type term creation must complete.' );
 		$term_id = intval( $term['term_id'] );
 
 		$storage = new SchemaStorage();
@@ -286,7 +286,7 @@ class DocumentateDocumentPersistenceTest extends WP_UnitTestCase {
 	 */
 	private function create_repeater_document_type() {
 		$term = wp_insert_term( 'Tipo Repetidor ' . uniqid(), 'documentate_doc_type' );
-		$this->assertNotWPError( $term, 'La creación del término de repetidor debe completarse.' );
+		$this->assertNotWPError( $term, 'Repeater type term creation must complete.' );
 		$term_id = intval( $term['term_id'] );
 
 		$storage = new SchemaStorage();
@@ -312,7 +312,7 @@ class DocumentateDocumentPersistenceTest extends WP_UnitTestCase {
 			true
 		);
 
-		$this->assertNotWPError( $post_id, 'La creación del CPT documentate_document debe completarse.' );
+		$this->assertNotWPError( $post_id, 'documentate_document CPT creation must complete.' );
 		$this->assertGreaterThan( 0, intval( $post_id ) );
 
 		wp_set_post_terms( intval( $post_id ), array( $term_id ), 'documentate_doc_type', false );
@@ -391,8 +391,8 @@ class DocumentateDocumentPersistenceTest extends WP_UnitTestCase {
 		);
 
 		$result = wp_update_post( $update_payload, true );
-		$this->assertNotWPError( $result, 'wp_update_post debe persistir el documento sin errores.' );
-		$this->assertSame( intval( $post_id ), intval( $result ), 'El ID devuelto debe coincidir con el documento actualizado.' );
+		$this->assertNotWPError( $result, 'wp_update_post must persist the document without errors.' );
+		$this->assertSame( intval( $post_id ), intval( $result ), 'Returned ID must match the updated document.' );
 
 		return (string) get_post_field( 'post_content', $post_id );
 	}

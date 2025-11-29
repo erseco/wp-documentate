@@ -72,11 +72,11 @@ class DocumentateComplexHtmlIntegrationTest extends WP_UnitTestCase {
 
 		// Verify the file is a valid ZIP (ODT is a ZIP file)
 		$zip = new ZipArchive();
-		$this->assertTrue( $zip->open( $path ) === true, 'El ODT generado debe ser un archivo ZIP válido.' );
+		$this->assertTrue( $zip->open( $path ) === true, 'Generated ODT must be a valid ZIP file.' );
 
 		// Extract and check content.xml
 		$content_xml = $zip->getFromName( 'content.xml' );
-		$this->assertNotFalse( $content_xml, 'El ODT debe contener content.xml.' );
+		$this->assertNotFalse( $content_xml, 'ODT must contain content.xml.' );
 		$zip->close();
 
 		// Verify content contains our text (not the placeholders)
@@ -156,11 +156,11 @@ class DocumentateComplexHtmlIntegrationTest extends WP_UnitTestCase {
 
 		// Verify the file is a valid ZIP (DOCX is a ZIP file)
 		$zip = new ZipArchive();
-		$this->assertTrue( $zip->open( $path ) === true, 'El DOCX generado debe ser un archivo ZIP válido.' );
+		$this->assertTrue( $zip->open( $path ) === true, 'Generated DOCX must be a valid ZIP file.' );
 
 		// Extract and check document.xml
 		$document_xml = $zip->getFromName( 'word/document.xml' );
-		$this->assertNotFalse( $document_xml, 'El DOCX debe contener word/document.xml.' );
+		$this->assertNotFalse( $document_xml, 'DOCX must contain word/document.xml.' );
 		$zip->close();
 
 		// Verify content contains our items

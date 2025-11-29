@@ -56,7 +56,7 @@ class DocumentateTemplateParserTest extends WP_UnitTestCase {
 
 		$schema = Documentate_Template_Parser::build_schema_from_field_definitions( $fields );
 
-		$this->assertNotEmpty( $schema, 'La definición de esquema no debe estar vacía.' );
+		$this->assertNotEmpty( $schema, 'Schema definition must not be empty.' );
 
 		$array_field = null;
 		foreach ( $schema as $entry ) {
@@ -66,7 +66,7 @@ class DocumentateTemplateParserTest extends WP_UnitTestCase {
 			}
 		}
 
-		$this->assertIsArray( $array_field, 'Se debe detectar el campo de anexos.' );
+		$this->assertIsArray( $array_field, 'Annexes array field must be detected.' );
 		$this->assertSame( 'array', $array_field['type'] );
 		$this->assertSame( 'array', $array_field['data_type'] );
 		$this->assertArrayHasKey( 'item_schema', $array_field );
