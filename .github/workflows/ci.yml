@@ -109,6 +109,9 @@ jobs:
       - name: Install Dependencies
         run: composer install --no-interaction --prefer-dist
 
+      - name: Install gettext
+        run: sudo apt-get install -y gettext
+
       - name: Check Untranslated Strings
         run: make check-untranslated
 
