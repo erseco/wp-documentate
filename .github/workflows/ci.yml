@@ -111,7 +111,7 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      # Setup PHP with caching
+      # Setup PHP (cache handled separately below)
       - name: PHP setup
         uses: shivammathur/setup-php@v2
         with:
@@ -119,7 +119,19 @@ jobs:
           extensions: mbstring, intl, curl, dom, json, pdo, mysql, xml, zip
           tools: composer:v2
           coverage: none
-          cache: composer
+
+      # Cache Composer dependencies
+      - name: Get Composer Cache Directory
+        id: composer-cache
+        run: |
+          echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+      
+      - uses: actions/cache@v4
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-composer-
 
       # Cache Playwright binaries
       - name: Cache Playwright binaries
