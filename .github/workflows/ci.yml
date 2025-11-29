@@ -184,7 +184,11 @@ jobs:
 
   # JOB 4: E2E TESTS (Requires Docker + Playwright)
   test-e2e:
-
+    strategy:
+      fail-fast: false
+      matrix:
+        shardIndex: [1, 2, 3, 4]
+        shardTotal: [4]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -202,7 +206,6 @@ jobs:
           tools: composer:v2
           coverage: none
 
-      # Caché Composer
       - name: Get Composer Cache
         id: composer-cache
         run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
@@ -212,7 +215,6 @@ jobs:
           path: ${{ steps.composer-cache.outputs.dir }}
           key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
 
-      # (NUEVO) CACHÉ DE WP-ENV (Mismo key que en unit tests para compartir descargas)
       - name: Cache wp-env files
         uses: actions/cache@v4
         with:
@@ -241,8 +243,8 @@ jobs:
       - name: Start Environment
         run: make up
 
-      - name: Run E2E Tests
-        run: make test-e2e
+      - name: Run E2E Tests (Shard ${{ matrix.shardIndex }}/${{ matrix.shardTotal }})
+        run: make test-e2e ARGS="--shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }}"
         env:
           CI: true
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
@@ -251,6 +253,6 @@ jobs:
         uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.shardIndex }}
           path: artifacts/
           retention-days: 7

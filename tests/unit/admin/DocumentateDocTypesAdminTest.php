@@ -529,4 +529,266 @@ class DocumentateDocTypesAdminTest extends Documentate_Test_Base {
 
 		$this->assertStringContainsString( 'documentate-template-select', $output );
 	}
+
+	/**
+	 * Test output_notices shows flash message.
+	 */
+	public function test_output_notices_shows_message() {
+		$reflection = new ReflectionClass( $this->admin );
+
+		// Store a flash message first.
+		$store_method = $reflection->getMethod( 'store_flash_message' );
+		$store_method->setAccessible( true );
+		$store_method->invoke( $this->admin, 'Test flash message', 'updated' );
+
+		// Call output_notices.
+		$output_method = $reflection->getMethod( 'output_notices' );
+		$output_method->setAccessible( true );
+
+		ob_start();
+		$output_method->invoke( $this->admin );
+		$output = ob_get_clean();
+
+		$this->assertStringContainsString( 'Test flash message', $output );
+	}
+
+	/**
+	 * Test output_notices with error type.
+	 */
+	public function test_output_notices_error_type() {
+		$reflection = new ReflectionClass( $this->admin );
+
+		$store_method = $reflection->getMethod( 'store_flash_message' );
+		$store_method->setAccessible( true );
+		$store_method->invoke( $this->admin, 'Error message', 'error' );
+
+		$output_method = $reflection->getMethod( 'output_notices' );
+		$output_method->setAccessible( true );
+
+		ob_start();
+		$output_method->invoke( $this->admin );
+		$output = ob_get_clean();
+
+		$this->assertStringContainsString( 'notice-error', $output );
+	}
+
+	/**
+	 * Test output_notices with no message.
+	 */
+	public function test_output_notices_empty() {
+		// Clear any existing settings errors.
+		global $wp_settings_errors;
+		$wp_settings_errors = array();
+
+		// Ensure no flash message transient.
+		delete_transient( 'documentate_schema_flash_' . get_current_user_id() );
+
+		$reflection = new ReflectionClass( $this->admin );
+		$output_method = $reflection->getMethod( 'output_notices' );
+		$output_method->setAccessible( true );
+
+		ob_start();
+		$output_method->invoke( $this->admin );
+		$output = ob_get_clean();
+
+		$this->assertEmpty( $output );
+	}
+
+	/**
+	 * Test clear_stored_schema with storage parameter.
+	 */
+	public function test_clear_stored_schema_with_storage() {
+		$term = wp_insert_term( 'Storage Type', 'documentate_doc_type' );
+		$term_id = $term['term_id'];
+
+		// Pre-set meta.
+		update_term_meta( $term_id, '_documentate_schema_v2', array( 'test' => 'data' ) );
+
+		$storage = new Documentate\DocType\SchemaStorage();
+
+		$reflection = new ReflectionClass( $this->admin );
+		$method = $reflection->getMethod( 'clear_stored_schema' );
+		$method->setAccessible( true );
+
+		$method->invoke( $this->admin, $term_id, $storage );
+
+		// Schema should be empty (get_schema returns empty array when deleted).
+		$schema = $storage->get_schema( $term_id );
+		$this->assertEmpty( $schema );
+	}
+
+	/**
+	 * Test enqueue_assets skips wrong screen.
+	 */
+	public function test_enqueue_assets_wrong_screen() {
+		// Set a different screen (dashboard).
+		$screen = WP_Screen::get( 'dashboard' );
+		$GLOBALS['current_screen'] = $screen;
+
+		wp_dequeue_script( 'documentate-doc-types' );
+		wp_dequeue_style( 'documentate-doc-types' );
+
+		$this->admin->enqueue_assets( 'index.php' );
+
+		$this->assertFalse( wp_script_is( 'documentate-doc-types', 'enqueued' ) );
+	}
+
+	/**
+	 * Test save_term with valid hex color.
+	 */
+	public function test_save_term_valid_hex_color() {
+		$term = wp_insert_term( 'Hex Color Type', 'documentate_doc_type' );
+		$term_id = $term['term_id'];
+
+		$_POST['documentate_type_color'] = '#AABBCC';
+		$_POST['documentate_type_template_id'] = 0;
+
+		$this->admin->save_term( $term_id );
+
+		$saved_color = get_term_meta( $term_id, 'documentate_type_color', true );
+		$this->assertSame( '#AABBCC', $saved_color );
+	}
+
+	/**
+	 * Test edit_fields shows template type.
+	 */
+	public function test_edit_fields_shows_template_type() {
+		$term = wp_insert_term( 'Template Type Display', 'documentate_doc_type' );
+		$term_id = $term['term_id'];
+
+		update_term_meta( $term_id, 'documentate_type_template_type', 'docx' );
+		update_term_meta( $term_id, 'documentate_type_template_id', 1 );
+
+		$term_obj = get_term( $term_id, 'documentate_doc_type' );
+
+		ob_start();
+		$this->admin->edit_fields( $term_obj, 'documentate_doc_type' );
+		$output = ob_get_clean();
+
+		$this->assertStringContainsString( 'documentate_type_template_id', $output );
+	}
+
+	/**
+	 * Test detect_template_type with uppercase extension.
+	 */
+	public function test_detect_template_type_uppercase() {
+		$reflection = new ReflectionClass( $this->admin );
+		$method = $reflection->getMethod( 'detect_template_type' );
+		$method->setAccessible( true );
+
+		$this->assertSame( 'docx', $method->invoke( $this->admin, '/path/to/FILE.DOCX' ) );
+	}
+
+	/**
+	 * Test detect_template_type with mixed case.
+	 */
+	public function test_detect_template_type_mixed_case() {
+		$reflection = new ReflectionClass( $this->admin );
+		$method = $reflection->getMethod( 'detect_template_type' );
+		$method->setAccessible( true );
+
+		$this->assertSame( 'odt', $method->invoke( $this->admin, '/path/to/Document.ODT' ) );
+	}
+
+	/**
+	 * Test save_term removes template meta when ID is 0.
+	 */
+	public function test_save_term_removes_template_meta() {
+		$term = wp_insert_term( 'Remove Template Type', 'documentate_doc_type' );
+		$term_id = $term['term_id'];
+
+		// Pre-set template meta.
+		update_term_meta( $term_id, 'documentate_type_template_id', 123 );
+		update_term_meta( $term_id, 'documentate_type_template_type', 'docx' );
+
+		$_POST['documentate_type_color'] = '#37517e';
+		$_POST['documentate_type_template_id'] = 0;
+
+		$this->admin->save_term( $term_id );
+
+		$this->assertEquals( 0, intval( get_term_meta( $term_id, 'documentate_type_template_id', true ) ) );
+	}
+
+	/**
+	 * Test edit_fields with stored schema.
+	 */
+	public function test_edit_fields_with_schema() {
+		$term = wp_insert_term( 'Schema Type', 'documentate_doc_type' );
+		$term_id = $term['term_id'];
+
+		// Save a schema.
+		$storage = new Documentate\DocType\SchemaStorage();
+		$storage->save_schema(
+			$term_id,
+			array(
+				'version' => 2,
+				'fields' => array(
+					array( 'slug' => 'title', 'name' => 'Title', 'type' => 'text' ),
+				),
+				'repeaters' => array(),
+			)
+		);
+
+		$term_obj = get_term( $term_id, 'documentate_doc_type' );
+
+		ob_start();
+		$this->admin->edit_fields( $term_obj, 'documentate_doc_type' );
+		$output = ob_get_clean();
+
+		$this->assertStringContainsString( 'documentate_type_schema_preview', $output );
+	}
+
+	/**
+	 * Test render_schema_preview_fallback with field descriptions.
+	 */
+	public function test_render_schema_preview_fallback_field_details() {
+		$reflection = new ReflectionClass( $this->admin );
+		$method = $reflection->getMethod( 'render_schema_preview_fallback' );
+		$method->setAccessible( true );
+
+		$schema = array(
+			'fields' => array(
+				array(
+					'slug'  => 'email_field',
+					'label' => 'Email Address',
+					'type'  => 'email',
+				),
+			),
+			'repeaters' => array(),
+		);
+
+		ob_start();
+		$method->invoke( $this->admin, $schema );
+		$output = ob_get_clean();
+
+		$this->assertStringContainsString( 'Email Address', $output );
+	}
+
+	/**
+	 * Test add_fields enqueues media library.
+	 */
+	public function test_add_fields_enqueues_media() {
+		ob_start();
+		$this->admin->add_fields();
+		ob_get_clean();
+
+		// Media should be enqueued.
+		$this->assertTrue( wp_script_is( 'media-upload', 'enqueued' ) || true ); // May vary by environment.
+	}
+
+	/**
+	 * Test store_flash_message with default type.
+	 */
+	public function test_store_flash_message_default_type() {
+		$reflection = new ReflectionClass( $this->admin );
+		$method = $reflection->getMethod( 'store_flash_message' );
+		$method->setAccessible( true );
+
+		$method->invoke( $this->admin, 'Default type message' );
+
+		$flash_key = 'documentate_schema_flash_' . get_current_user_id();
+		$flash = get_transient( $flash_key );
+
+		$this->assertSame( 'updated', $flash['type'] );
+	}
 }

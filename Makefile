@@ -141,7 +141,7 @@ setup-tests-env:
 
 # Run E2E tests with Playwright against wp-env tests environment (port 8889)
 test-e2e: start-if-not-running setup-tests-env
-	WP_BASE_URL=http://localhost:8889 npm run test:e2e
+	WP_BASE_URL=http://localhost:8889 npm run test:e2e -- $(ARGS)
 
 test-e2e-visual: start-if-not-running setup-tests-env
 	WP_BASE_URL=http://localhost:8889 npm run test:e2e -- --ui

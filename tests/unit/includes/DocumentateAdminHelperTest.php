@@ -921,4 +921,338 @@ class DocumentateAdminHelperTest extends Documentate_Test_Base {
 			has_action( 'admin_post_documentate_converter', array( $this->helper, 'render_converter_page' ) )
 		);
 	}
+
+	/**
+	 * Test enqueue_actions_metabox_assets with CDN mode enabled.
+	 */
+	public function test_enqueue_actions_metabox_assets_cdn_mode() {
+		update_option( 'documentate_settings', array(
+			'pdf_converter' => 'zetajs_cdn',
+		) );
+
+		$post = $this->factory->post->create_and_get( array( 'post_type' => 'documentate_document' ) );
+		$_GET['post'] = $post->ID;
+
+		$screen = WP_Screen::get( 'documentate_document' );
+		$screen->post_type = 'documentate_document';
+		$GLOBALS['current_screen'] = $screen;
+
+		$this->helper->enqueue_actions_metabox_assets( 'post.php' );
+
+		$this->assertTrue( wp_script_is( 'documentate-actions', 'enqueued' ) );
+	}
+
+	/**
+	 * Test render_actions_metabox with ODT template.
+	 */
+	public function test_render_actions_metabox_with_odt_template() {
+		$term = wp_insert_term( 'ODT Type', 'documentate_doc_type' );
+		$term_id = $term['term_id'];
+
+		$fixture_path = plugin_dir_path( DOCUMENTATE_PLUGIN_FILE ) . 'fixtures/plantilla.odt';
+		if ( file_exists( $fixture_path ) ) {
+			$attachment_id = $this->factory->attachment->create_upload_object( $fixture_path );
+			update_term_meta( $term_id, 'documentate_type_template_id', $attachment_id );
+			update_term_meta( $term_id, 'documentate_type_template_type', 'odt' );
+		}
+
+		$post = $this->factory->post->create_and_get( array( 'post_type' => 'documentate_document' ) );
+		wp_set_post_terms( $post->ID, array( $term_id ), 'documentate_doc_type' );
+
+		ob_start();
+		$this->helper->render_actions_metabox( $post );
+		$output = ob_get_clean();
+
+		$this->assertStringContainsString( 'button', $output );
+	}
+
+	/**
+	 * Test render_actions_metabox with DOCX template.
+	 */
+	public function test_render_actions_metabox_with_docx_template() {
+		$term = wp_insert_term( 'DOCX Type', 'documentate_doc_type' );
+		$term_id = $term['term_id'];
+
+		$fixture_path = plugin_dir_path( DOCUMENTATE_PLUGIN_FILE ) . 'fixtures/plantilla.docx';
+		if ( file_exists( $fixture_path ) ) {
+			$attachment_id = $this->factory->attachment->create_upload_object( $fixture_path );
+			update_term_meta( $term_id, 'documentate_type_template_id', $attachment_id );
+			update_term_meta( $term_id, 'documentate_type_template_type', 'docx' );
+		}
+
+		$post = $this->factory->post->create_and_get( array( 'post_type' => 'documentate_document' ) );
+		wp_set_post_terms( $post->ID, array( $term_id ), 'documentate_doc_type' );
+
+		ob_start();
+		$this->helper->render_actions_metabox( $post );
+		$output = ob_get_clean();
+
+		$this->assertStringContainsString( 'DOCX', $output );
+	}
+
+	/**
+	 * Test build_action_attributes with href empty value keeps attribute.
+	 */
+	public function test_build_action_attributes_href_empty() {
+		$reflection = new ReflectionClass( $this->helper );
+		$method = $reflection->getMethod( 'build_action_attributes' );
+		$method->setAccessible( true );
+
+		$attrs = array(
+			'href' => '',
+			'class' => 'button',
+		);
+
+		$result = $method->invoke( $this->helper, $attrs );
+
+		// href should be included even if empty.
+		$this->assertStringContainsString( 'href=', $result );
+		$this->assertStringContainsString( 'class="button"', $result );
+	}
+
+	/**
+	 * Test remember_preview_stream_file sanitizes filename.
+	 */
+	public function test_remember_preview_stream_file_sanitizes() {
+		$reflection = new ReflectionClass( $this->helper );
+		$method = $reflection->getMethod( 'remember_preview_stream_file' );
+		$method->setAccessible( true );
+
+		$post_id = 123;
+		// Attempt path traversal in filename.
+		$filename = '../../../etc/passwd';
+
+		$result = $method->invoke( $this->helper, $post_id, $filename );
+
+		// Should sanitize (sanitize_file_name removes slashes and dots).
+		$this->assertTrue( $result );
+
+		$key_method = $reflection->getMethod( 'get_preview_stream_transient_key' );
+		$key_method->setAccessible( true );
+		$key = $key_method->invoke( $this->helper, $post_id, get_current_user_id() );
+
+		$stored = get_transient( $key );
+		// sanitize_file_name removes dots and slashes, leaving 'etcpasswd'.
+		$this->assertSame( 'etcpasswd', $stored );
+	}
+
+	/**
+	 * Test render_actions_metabox outputs preferred format as primary.
+	 */
+	public function test_render_actions_metabox_preferred_format() {
+		$term = wp_insert_term( 'Preferred Type', 'documentate_doc_type' );
+		$term_id = $term['term_id'];
+		update_term_meta( $term_id, 'documentate_type_template_type', 'odt' );
+
+		$fixture_path = plugin_dir_path( DOCUMENTATE_PLUGIN_FILE ) . 'fixtures/plantilla.odt';
+		if ( file_exists( $fixture_path ) ) {
+			$attachment_id = $this->factory->attachment->create_upload_object( $fixture_path );
+			update_term_meta( $term_id, 'documentate_type_template_id', $attachment_id );
+		}
+
+		$post = $this->factory->post->create_and_get( array( 'post_type' => 'documentate_document' ) );
+		wp_set_post_terms( $post->ID, array( $term_id ), 'documentate_doc_type' );
+
+		ob_start();
+		$this->helper->render_actions_metabox( $post );
+		$output = ob_get_clean();
+
+		// The ODT button should be primary.
+		$this->assertStringContainsString( 'button-primary', $output );
+	}
+
+	/**
+	 * Test maybe_notice on post base screen.
+	 */
+	public function test_maybe_notice_post_base_screen() {
+		$_GET['documentate_notice'] = 'Test message';
+		$screen = WP_Screen::get( 'post' );
+		$screen->base = 'post';
+		$screen->id = 'post';
+		$GLOBALS['current_screen'] = $screen;
+
+		ob_start();
+		$this->helper->maybe_notice();
+		$output = ob_get_clean();
+
+		$this->assertStringContainsString( 'Test message', $output );
+	}
+
+	/**
+	 * Test enqueue_title_textarea_assets on wrong post type.
+	 */
+	public function test_enqueue_title_textarea_wrong_post_type() {
+		$screen = WP_Screen::get( 'post' );
+		$screen->base = 'post';
+		$screen->post_type = 'post';
+		$GLOBALS['current_screen'] = $screen;
+
+		wp_dequeue_style( 'documentate-title-textarea' );
+		wp_dequeue_script( 'documentate-title-textarea' );
+
+		$this->helper->enqueue_title_textarea_assets( 'post.php' );
+
+		$this->assertFalse( wp_style_is( 'documentate-title-textarea', 'enqueued' ) );
+	}
+
+	/**
+	 * Test add_row_actions with zero template ID at term level.
+	 */
+	public function test_add_row_actions_zero_term_template() {
+		$term_result = wp_insert_term( 'Zero Template Type', 'documentate_doc_type' );
+		$doc_type = $term_result['term_id'];
+		update_term_meta( $doc_type, 'documentate_type_docx_template', 0 );
+
+		$post = $this->factory->post->create_and_get( array( 'post_type' => 'documentate_document' ) );
+		wp_set_object_terms( $post->ID, $doc_type, 'documentate_doc_type' );
+
+		$actions = array();
+		$result = $this->helper->add_row_actions( $actions, $post );
+
+		$this->assertArrayNotHasKey( 'documentate_export_docx', $result );
+	}
+
+	/**
+	 * Test get_wp_filesystem caches instance.
+	 */
+	public function test_get_wp_filesystem_caches() {
+		$reflection = new ReflectionClass( $this->helper );
+		$method = $reflection->getMethod( 'get_wp_filesystem' );
+		$method->setAccessible( true );
+
+		$result1 = $method->invoke( $this->helper );
+		$result2 = $method->invoke( $this->helper );
+
+		// Both calls should return the same instance.
+		if ( $result1 instanceof WP_Filesystem_Base && $result2 instanceof WP_Filesystem_Base ) {
+			$this->assertSame( $result1, $result2 );
+		}
+	}
+
+	/**
+	 * Test ensure_document_generator only loads once.
+	 */
+	public function test_ensure_document_generator_caches() {
+		$reflection = new ReflectionClass( $this->helper );
+		$method = $reflection->getMethod( 'ensure_document_generator' );
+		$method->setAccessible( true );
+
+		$prop = $reflection->getProperty( 'document_generator_loaded' );
+		$prop->setAccessible( true );
+
+		// First call.
+		$method->invoke( $this->helper );
+		$this->assertTrue( $prop->getValue( $this->helper ) );
+
+		// Second call should not reload.
+		$method->invoke( $this->helper );
+		$this->assertTrue( $prop->getValue( $this->helper ) );
+	}
+
+	/**
+	 * Test render_actions_metabox without conversion available.
+	 */
+	public function test_render_actions_metabox_no_conversion() {
+		delete_option( 'documentate_settings' );
+
+		$term = wp_insert_term( 'No Conv Type', 'documentate_doc_type' );
+		$term_id = $term['term_id'];
+
+		$fixture_path = plugin_dir_path( DOCUMENTATE_PLUGIN_FILE ) . 'fixtures/plantilla.odt';
+		if ( file_exists( $fixture_path ) ) {
+			$attachment_id = $this->factory->attachment->create_upload_object( $fixture_path );
+			update_term_meta( $term_id, 'documentate_type_template_id', $attachment_id );
+			update_term_meta( $term_id, 'documentate_type_template_type', 'odt' );
+		}
+
+		$post = $this->factory->post->create_and_get( array( 'post_type' => 'documentate_document' ) );
+		wp_set_post_terms( $post->ID, array( $term_id ), 'documentate_doc_type' );
+
+		ob_start();
+		$this->helper->render_actions_metabox( $post );
+		$output = ob_get_clean();
+
+		$this->assertStringContainsString( 'ODT', $output );
+	}
+
+	/**
+	 * Test admin_enqueue_scripts hook is registered.
+	 */
+	public function test_admin_enqueue_scripts_hooks_registered() {
+		$this->assertNotFalse(
+			has_action( 'admin_enqueue_scripts', array( $this->helper, 'enqueue_title_textarea_assets' ) )
+		);
+		$this->assertNotFalse(
+			has_action( 'admin_enqueue_scripts', array( $this->helper, 'enqueue_actions_metabox_assets' ) )
+		);
+	}
+
+	/**
+	 * Test add_meta_boxes hook is registered.
+	 */
+	public function test_add_meta_boxes_hook_registered() {
+		$this->assertNotFalse(
+			has_action( 'add_meta_boxes', array( $this->helper, 'add_actions_metabox' ) )
+		);
+	}
+
+	/**
+	 * Test render_actions_metabox description text.
+	 */
+	public function test_render_actions_metabox_description() {
+		$post = $this->factory->post->create_and_get( array( 'post_type' => 'documentate_document' ) );
+
+		ob_start();
+		$this->helper->render_actions_metabox( $post );
+		$output = ob_get_clean();
+
+		$this->assertStringContainsString( 'description', $output );
+	}
+
+	/**
+	 * Test build_action_attributes with special characters.
+	 */
+	public function test_build_action_attributes_special_chars() {
+		$reflection = new ReflectionClass( $this->helper );
+		$method = $reflection->getMethod( 'build_action_attributes' );
+		$method->setAccessible( true );
+
+		$attrs = array(
+			'class' => 'button & primary',
+			'href'  => 'https://example.com?a=1&b=2',
+		);
+
+		$result = $method->invoke( $this->helper, $attrs );
+
+		// Should be properly escaped.
+		$this->assertStringContainsString( 'class="button', $result );
+		$this->assertStringContainsString( 'href=', $result );
+	}
+
+	/**
+	 * Test render_actions_metabox with both templates.
+	 */
+	public function test_render_actions_metabox_both_templates() {
+		$term = wp_insert_term( 'Both Templates Type', 'documentate_doc_type' );
+		$term_id = $term['term_id'];
+
+		$odt_path = plugin_dir_path( DOCUMENTATE_PLUGIN_FILE ) . 'fixtures/plantilla.odt';
+		$docx_path = plugin_dir_path( DOCUMENTATE_PLUGIN_FILE ) . 'fixtures/plantilla.docx';
+
+		if ( file_exists( $odt_path ) && file_exists( $docx_path ) ) {
+			$odt_id = $this->factory->attachment->create_upload_object( $odt_path );
+			$docx_id = $this->factory->attachment->create_upload_object( $docx_path );
+			update_term_meta( $term_id, 'documentate_type_template_id', $odt_id );
+			update_term_meta( $term_id, 'documentate_type_template_type', 'odt' );
+		}
+
+		$post = $this->factory->post->create_and_get( array( 'post_type' => 'documentate_document' ) );
+		wp_set_post_terms( $post->ID, array( $term_id ), 'documentate_doc_type' );
+
+		ob_start();
+		$this->helper->render_actions_metabox( $post );
+		$output = ob_get_clean();
+
+		$this->assertStringContainsString( 'ODT', $output );
+	}
 }
