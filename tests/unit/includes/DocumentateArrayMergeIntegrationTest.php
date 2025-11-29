@@ -15,29 +15,29 @@ class DocumentateArrayMergeIntegrationTest extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Debe generar un ODT con un bloque repetible sin imprimir "Array" y con los campos sustituidos.
+	 * Must generate an ODT with a repeater block without printing "Array" and with fields replaced.
 	 */
 	public function test_generate_odt_merges_repeater_without_array_artifacts() {
-		// Importa la plantilla avanzada ODT de fixtures y prepara el tipo.
+		// Import the advanced ODT template from fixtures and prepare the type.
 		documentate_ensure_default_media();
 		$tpl_id = documentate_import_fixture_file( 'demo-wp-documentate.odt' );
-		$this->assertGreaterThan( 0, $tpl_id, 'La plantilla ODT de prueba debe importarse correctamente.' );
+		$this->assertGreaterThan( 0, $tpl_id, 'Test ODT template must be imported correctly.' );
 		$tpl_path = get_attached_file( $tpl_id );
-		$this->assertFileExists( $tpl_path, 'La ruta de la plantilla ODT debe existir.' );
+		$this->assertFileExists( $tpl_path, 'ODT template path must exist.' );
 
 		$term    = wp_insert_term( 'Tipo Repetidor', 'documentate_doc_type' );
 		$term_id = intval( $term['term_id'] );
 		update_term_meta( $term_id, 'documentate_type_template_id', $tpl_id );
 		update_term_meta( $term_id, 'documentate_type_template_type', 'odt' );
 
-		// Extrae y guarda el esquema para ese tipo (incluye el bloque "items").
+		// Extract and save the schema for this type (includes the "items" block).
 		$extractor = new SchemaExtractor();
 		$schema    = $extractor->extract( $tpl_path );
-		$this->assertNotWPError( $schema, 'El esquema de la plantilla ODT debe extraerse sin errores.' );
+		$this->assertNotWPError( $schema, 'ODT template schema must be extracted without errors.' );
 		$storage = new SchemaStorage();
 		$storage->save_schema( $term_id, $schema );
 
-		// Localiza el bloque repetible "items" y sus campos para poblar datos.
+		// Locate the "items" repeater block and its fields to populate data.
 		$repeaters = isset( $schema['repeaters'] ) && is_array( $schema['repeaters'] ) ? $schema['repeaters'] : array();
 		$items_def = null;
 		foreach ( $repeaters as $rp ) {
@@ -46,7 +46,7 @@ class DocumentateArrayMergeIntegrationTest extends WP_UnitTestCase {
 				break;
 			}
 		}
-		$this->assertIsArray( $items_def, 'La plantilla debe definir un bloque repetible con slug items.' );
+		$this->assertIsArray( $items_def, 'Template must define a repeater block with slug items.' );
 		$item_fields = array();
 		if ( isset( $items_def['fields'] ) && is_array( $items_def['fields'] ) ) {
 			foreach ( $items_def['fields'] as $f ) {
@@ -55,9 +55,9 @@ class DocumentateArrayMergeIntegrationTest extends WP_UnitTestCase {
 				}
 			}
 		}
-		$this->assertNotEmpty( $item_fields, 'El bloque items debe contener campos.' );
+		$this->assertNotEmpty( $item_fields, 'Items block must contain fields.' );
 
-		// Prepara un documento con valores para el bloque repetible.
+		// Prepare a document with values for the repeater block.
 		$post_id = wp_insert_post(
 			array(
 				'post_type'   => 'documentate_document',
@@ -85,60 +85,60 @@ class DocumentateArrayMergeIntegrationTest extends WP_UnitTestCase {
 		$_POST['documentate_doc_type']    = (string) $term_id;
 		$_POST['tpl_fields']           = wp_slash( array( 'items' => array( $item1, $item2 ) ) );
 
-		// Fuerza composición del contenido estructurado y guarda.
+		// Force structured content composition and save.
 		$data    = array( 'post_type' => 'documentate_document' );
 		$postarr = array( 'ID' => $post_id );
 		$result  = $doc->filter_post_data_compose_content( $data, $postarr );
 		wp_update_post( array( 'ID' => $post_id, 'post_content' => $result['post_content'] ) );
 		$_POST = array();
 
-		// Genera el ODT y comprueba que no contiene "Array" ni los placeholders sin resolver.
+		// Generate the ODT and verify it does not contain "Array" or unresolved placeholders.
 		$path = Documentate_Document_Generator::generate_odt( $post_id );
-		$this->assertIsString( $path, 'La generación ODT debe devolver una ruta.' );
-		$this->assertFileExists( $path, 'El archivo ODT generado debe existir.' );
+		$this->assertIsString( $path, 'ODT generation must return a path.' );
+		$this->assertFileExists( $path, 'Generated ODT file must exist.' );
 
-		// Inspecciona content.xml en busca de artefactos.
+		// Inspect content.xml for artifacts.
 		$zip    = new ZipArchive();
 		$opened = $zip->open( $path );
-		$this->assertTrue( true === $opened, 'El ODT generado debe abrirse correctamente.' );
+		$this->assertTrue( true === $opened, 'Generated ODT must open correctly.' );
 		$xml = $zip->getFromName( 'content.xml' );
 		$zip->close();
-		$this->assertNotFalse( $xml, 'El ODT debe contener content.xml.' );
+		$this->assertNotFalse( $xml, 'ODT must contain content.xml.' );
 
-		// No debe aparecer el literal "Array".
-		$this->assertStringNotContainsString( 'Array', $xml, 'El documento no debe imprimir el literal "Array".' );
+		// The literal "Array" must not appear.
+		$this->assertStringNotContainsString( 'Array', $xml, 'Document must not print the literal "Array".' );
 
-		// Debe aparecer al menos un valor del repetidor.
+		// At least one value from the repeater must appear.
 		$this->assertTrue(
 			false !== strpos( $xml, 'Valor Uno' ) || false !== strpos( $xml, 'Valor Dos' ),
-			'El documento debe contener valores del bloque repetible.'
+			'Document must contain values from the repeater block.'
 		);
 	}
 
 	/**
-	 * Debe generar un DOCX con un bloque repetible sin imprimir "Array" y con los campos sustituidos.
+	 * Must generate a DOCX with a repeater block without printing "Array" and with fields replaced.
 	 */
 	public function test_generate_docx_merges_repeater_without_array_artifacts() {
-		// Importa la plantilla avanzada DOCX de fixtures y prepara el tipo.
+		// Import the advanced DOCX template from fixtures and prepare the type.
 		documentate_ensure_default_media();
 		$tpl_id = documentate_import_fixture_file( 'demo-wp-documentate.docx' );
-		$this->assertGreaterThan( 0, $tpl_id, 'La plantilla DOCX de prueba debe importarse correctamente.' );
+		$this->assertGreaterThan( 0, $tpl_id, 'Test DOCX template must be imported correctly.' );
 		$tpl_path = get_attached_file( $tpl_id );
-		$this->assertFileExists( $tpl_path, 'La ruta de la plantilla DOCX debe existir.' );
+		$this->assertFileExists( $tpl_path, 'DOCX template path must exist.' );
 
 		$term    = wp_insert_term( 'Tipo Repetidor DOCX', 'documentate_doc_type' );
 		$term_id = intval( $term['term_id'] );
 		update_term_meta( $term_id, 'documentate_type_template_id', $tpl_id );
 		update_term_meta( $term_id, 'documentate_type_template_type', 'docx' );
 
-		// Extrae y guarda el esquema para ese tipo (incluye el bloque "items").
+		// Extract and save the schema for this type (includes the "items" block).
 		$extractor = new SchemaExtractor();
 		$schema    = $extractor->extract( $tpl_path );
-		$this->assertNotWPError( $schema, 'El esquema de la plantilla DOCX debe extraerse sin errores.' );
+		$this->assertNotWPError( $schema, 'DOCX template schema must be extracted without errors.' );
 		$storage = new SchemaStorage();
 		$storage->save_schema( $term_id, $schema );
 
-		// Localiza el bloque repetible "items" y sus campos para poblar datos.
+		// Locate the "items" repeater block and its fields to populate data.
 		$repeaters = isset( $schema['repeaters'] ) && is_array( $schema['repeaters'] ) ? $schema['repeaters'] : array();
 		$items_def = null;
 		foreach ( $repeaters as $rp ) {
@@ -147,7 +147,7 @@ class DocumentateArrayMergeIntegrationTest extends WP_UnitTestCase {
 				break;
 			}
 		}
-		$this->assertIsArray( $items_def, 'La plantilla debe definir un bloque repetible con slug items.' );
+		$this->assertIsArray( $items_def, 'Template must define a repeater block with slug items.' );
 		$item_fields = array();
 		if ( isset( $items_def['fields'] ) && is_array( $items_def['fields'] ) ) {
 			foreach ( $items_def['fields'] as $f ) {
@@ -156,9 +156,9 @@ class DocumentateArrayMergeIntegrationTest extends WP_UnitTestCase {
 				}
 			}
 		}
-		$this->assertNotEmpty( $item_fields, 'El bloque items debe contener campos.' );
+		$this->assertNotEmpty( $item_fields, 'Items block must contain fields.' );
 
-		// Prepara un documento con valores para el bloque repetible.
+		// Prepare a document with values for the repeater block.
 		$post_id = wp_insert_post(
 			array(
 				'post_type'   => 'documentate_document',
@@ -185,31 +185,31 @@ class DocumentateArrayMergeIntegrationTest extends WP_UnitTestCase {
 		$_POST['documentate_doc_type']    = (string) $term_id;
 		$_POST['tpl_fields']           = wp_slash( array( 'items' => array( $item1, $item2 ) ) );
 
-		// Fuerza composición del contenido estructurado y guarda.
+		// Force structured content composition and save.
 		$data    = array( 'post_type' => 'documentate_document' );
 		$postarr = array( 'ID' => $post_id );
 		$result  = $doc->filter_post_data_compose_content( $data, $postarr );
 		wp_update_post( array( 'ID' => $post_id, 'post_content' => $result['post_content'] ) );
 		$_POST = array();
 
-		// Genera el DOCX y comprueba que no contiene "Array" ni los placeholders sin resolver.
+		// Generate the DOCX and verify it does not contain "Array" or unresolved placeholders.
 		$path = Documentate_Document_Generator::generate_docx( $post_id );
-		$this->assertIsString( $path, 'La generación DOCX debe devolver una ruta.' );
-		$this->assertFileExists( $path, 'El archivo DOCX generado debe existir.' );
+		$this->assertIsString( $path, 'DOCX generation must return a path.' );
+		$this->assertFileExists( $path, 'Generated DOCX file must exist.' );
 
 		$zip    = new ZipArchive();
 		$opened = $zip->open( $path );
-		$this->assertTrue( true === $opened, 'El DOCX generado debe abrirse correctamente.' );
+		$this->assertTrue( true === $opened, 'Generated DOCX must open correctly.' );
 		$xml = $zip->getFromName( 'word/document.xml' );
 		$zip->close();
-		$this->assertNotFalse( $xml, 'El DOCX debe contener word/document.xml.' );
+		$this->assertNotFalse( $xml, 'DOCX must contain word/document.xml.' );
 
-		$this->assertStringNotContainsString( 'Array', $xml, 'El documento no debe imprimir el literal "Array".' );
+		$this->assertStringNotContainsString( 'Array', $xml, 'Document must not print the literal "Array".' );
 		$this->assertTrue(
 			false !== strpos( $xml, 'Valor Uno' ) || false !== strpos( $xml, 'Valor Dos' ),
-			'El documento debe contener valores del bloque repetible.'
+			'Document must contain values from the repeater block.'
 		);
-		$this->assertStringNotContainsString( '[items', $xml, 'No deben quedar placeholders [items...] sin resolver.' );
-		$this->assertStringNotContainsString( '[item.title', $xml, 'No deben quedar placeholders [item.title...] sin resolver.' );
+		$this->assertStringNotContainsString( '[items', $xml, 'No [items...] placeholders should remain unresolved.' );
+		$this->assertStringNotContainsString( '[item.title', $xml, 'No [item.title...] placeholders should remain unresolved.' );
 	}
 }

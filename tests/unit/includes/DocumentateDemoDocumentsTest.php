@@ -61,20 +61,20 @@ class DocumentateDemoDocumentsTest extends WP_UnitTestCase {
 				)
 			);
 
-			$this->assertCount( 1, $posts, 'Debe crear un único documento de prueba por cada tipo.' );
+			$this->assertCount( 1, $posts, 'Must create a single test document per type.' );
 
 			$post_id = intval( $posts[0] );
 			$this->assertGreaterThan( 0, $post_id );
 
 			$assigned = wp_get_post_terms( $post_id, 'documentate_doc_type', array( 'fields' => 'ids' ) );
 			$this->assertNotWPError( $assigned );
-			$this->assertContains( $term->term_id, $assigned, 'El documento de prueba debe estar asignado al tipo correspondiente.' );
+			$this->assertContains( $term->term_id, $assigned, 'Test document must be assigned to the corresponding type.' );
 
 			$structured = Documentate_Documents::parse_structured_content( get_post_field( 'post_content', $post_id ) );
-			$this->assertNotEmpty( $structured, 'El documento de prueba debe incluir contenido estructurado.' );
+			$this->assertNotEmpty( $structured, 'Test document must include structured content.' );
 		}
 
-		$this->assertFalse( get_option( 'documentate_seed_demo_documents', false ), 'La opción de sembrado debe eliminarse tras crear los documentos.' );
+		$this->assertFalse( get_option( 'documentate_seed_demo_documents', false ), 'Seeding option must be removed after creating documents.' );
 	}
 }
 

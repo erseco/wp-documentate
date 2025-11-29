@@ -220,16 +220,16 @@ class Documentate_Ajax_Handlers {
 	 */
 	private function get_board_info( $task ) {
 		$board_color = 'red';
-		$board_name = 'Unassigned';
+		$board_name  = __( 'Unassigned', 'documentate' );
 
 		if ( $task->board ) {
 			$board_color = $task->board->color;
-			$board_name = $task->board->name;
+			$board_name  = $task->board->name;
 		}
 
 		return array(
 			'color' => $board_color,
-			'name' => $board_name,
+			'name'  => $board_name,
 		);
 	}
 

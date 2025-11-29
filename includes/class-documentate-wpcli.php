@@ -45,16 +45,17 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
 		public function create_sample_data() {
 			// Check if we're running on a development version.
 			if ( defined( 'DOCUMENTATE_VERSION' ) && DOCUMENTATE_VERSION !== '0.0.0' ) {
-				WP_CLI::warning( 'You are adding sample data to a non-development version of Documentate (v' . DOCUMENTATE_VERSION . ')' );
-				WP_CLI::confirm( 'Do you want to continue?' );
+				/* translators: %s: plugin version number. */
+				WP_CLI::warning( sprintf( __( 'You are adding sample data to a non-development version of Documentate (v%s)', 'documentate' ), DOCUMENTATE_VERSION ) );
+				WP_CLI::confirm( __( 'Do you want to continue?', 'documentate' ) );
 			}
 
-			WP_CLI::log( 'Starting sample data creation...' );
+			WP_CLI::log( __( 'Starting sample data creation...', 'documentate' ) );
 
 			$demo_data = new Documentate_Demo_Data();
 			$demo_data->create_sample_data();
 
-			WP_CLI::success( 'Sample data created successfully!' );
+			WP_CLI::success( __( 'Sample data created successfully!', 'documentate' ) );
 		}
 	}
 

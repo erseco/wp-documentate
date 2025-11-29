@@ -64,13 +64,13 @@ class DocumentateDocumentMetaBoxTest extends Documentate_Test_Base {
 
 		do_action( 'add_meta_boxes_documentate_document', $post );
 
-		$this->assertArrayHasKey( 'documentate_document', $wp_meta_boxes, 'El array de meta boxes debe contener la clave del CPT.' );
-		$this->assertArrayHasKey( 'side', $wp_meta_boxes['documentate_document'], 'El contexto lateral debe existir.' );
-		$this->assertArrayHasKey( 'default', $wp_meta_boxes['documentate_document']['side'], 'La prioridad por defecto debe existir.' );
+		$this->assertArrayHasKey( 'documentate_document', $wp_meta_boxes, 'Meta boxes array must contain the CPT key.' );
+		$this->assertArrayHasKey( 'side', $wp_meta_boxes['documentate_document'], 'Side context must exist.' );
+		$this->assertArrayHasKey( 'default', $wp_meta_boxes['documentate_document']['side'], 'Default priority must exist.' );
 		$this->assertArrayHasKey(
 			'documentate_document_meta',
 			$wp_meta_boxes['documentate_document']['side']['default'],
-			'El metabox de metadatos debe registrarse.'
+			'Metadata metabox must be registered.'
 		);
 	}
 
@@ -99,13 +99,13 @@ class DocumentateDocumentMetaBoxTest extends Documentate_Test_Base {
 		$this->meta_box->render( $post );
 		$html = ob_get_clean();
 
-		$this->assertStringContainsString( 'Documento Demo', $html, 'El titulo debe mostrarse como texto.' );
-		$this->assertStringContainsString( 'El asunto se deriva del titulo de la entrada.', $html, 'Debe mostrarse la ayuda del asunto.' );
-		$this->assertStringNotContainsString( 'name="documentate_document_meta_subject"', $html, 'El campo Asunto no debe renderizarse como entrada.' );
-		$this->assertStringContainsString( 'id="documentate_document_meta_author" name="documentate_document_meta_author" class="widefat"', $html, 'El campo Autoria debe ocupar el ancho completo.' );
-		$this->assertStringContainsString( 'id="documentate_document_meta_keywords" name="documentate_document_meta_keywords" class="widefat"', $html, 'El campo Palabras clave debe ocupar el ancho completo.' );
-		$this->assertStringContainsString( 'value="Autor previo"', $html, 'El autor almacenado debe aparecer.' );
-		$this->assertStringContainsString( 'value="uno, dos"', $html, 'Las palabras clave almacenadas deben aparecer.' );
+		$this->assertStringContainsString( 'Documento Demo', $html, 'Title must be displayed as text.' );
+		$this->assertStringContainsString( 'The subject is derived from the post title.', $html, 'Subject help text must be displayed.' );
+		$this->assertStringNotContainsString( 'name="documentate_document_meta_subject"', $html, 'Subject field must not be rendered as input.' );
+		$this->assertStringContainsString( 'id="documentate_document_meta_author" name="documentate_document_meta_author" class="widefat"', $html, 'Author field must span full width.' );
+		$this->assertStringContainsString( 'id="documentate_document_meta_keywords" name="documentate_document_meta_keywords" class="widefat"', $html, 'Keywords field must span full width.' );
+		$this->assertStringContainsString( 'value="Autor previo"', $html, 'Stored author must appear.' );
+		$this->assertStringContainsString( 'value="uno, dos"', $html, 'Stored keywords must appear.' );
 	}
 
 	/**
@@ -137,22 +137,22 @@ class DocumentateDocumentMetaBoxTest extends Documentate_Test_Base {
 		$author   = get_post_meta( $post_id, Document_Meta_Box::META_KEY_AUTHOR, true );
 		$keywords = get_post_meta( $post_id, Document_Meta_Box::META_KEY_KEYWORDS, true );
 
-		$this->assertSame( 255, strlen( $subject ), 'El asunto debe truncarse a 255 caracteres.' );
-		$this->assertStringNotContainsString( "\x07", $subject, 'El asunto no debe contener caracteres de control.' );
-		$this->assertSame( 'Autor con tab', $author, 'El autor debe limpiarse de espacios y controles.' );
-		$this->assertSame( 'uno, dos, tres', $keywords, 'Las palabras clave deben normalizarse.' );
+		$this->assertSame( 255, strlen( $subject ), 'Subject must be truncated to 255 characters.' );
+		$this->assertStringNotContainsString( "\x07", $subject, 'Subject must not contain control characters.' );
+		$this->assertSame( 'Autor con tab', $author, 'Author must be cleaned of spaces and control chars.' );
+		$this->assertSame( 'uno, dos, tres', $keywords, 'Keywords must be normalized.' );
 
 		$_POST['documentate_document_meta_keywords'] = str_repeat( 'palabra,', 200 );
 		$this->meta_box->save( $post_id );
 
 		$keywords = get_post_meta( $post_id, Document_Meta_Box::META_KEY_KEYWORDS, true );
-		$this->assertLessThanOrEqual( 512, strlen( $keywords ), 'Las palabras clave no deben superar los 512 caracteres.' );
+		$this->assertLessThanOrEqual( 512, strlen( $keywords ), 'Keywords must not exceed 512 characters.' );
 
 		$meta = Document_Meta::get( $post_id );
-		$this->assertSame( get_the_title( $post_id ), $meta['title'], 'El titulo debe provenir del post.' );
-		$this->assertSame( $subject, $meta['subject'], 'El asunto debe derivarse del titulo del post.' );
-		$this->assertSame( 'Autor con tab', $meta['author'], 'El autor debe recuperarse del meta.' );
-		$this->assertSame( $keywords, $meta['keywords'], 'Las palabras clave deben recuperarse del meta.' );
+		$this->assertSame( get_the_title( $post_id ), $meta['title'], 'Title must come from the post.' );
+		$this->assertSame( $subject, $meta['subject'], 'Subject must be derived from post title.' );
+		$this->assertSame( 'Autor con tab', $meta['author'], 'Author must be retrieved from meta.' );
+		$this->assertSame( $keywords, $meta['keywords'], 'Keywords must be retrieved from meta.' );
 	}
 
 	/**
@@ -174,8 +174,8 @@ class DocumentateDocumentMetaBoxTest extends Documentate_Test_Base {
 
 		$this->meta_box->save( $post_id );
 
-		$this->assertSame( 'Original', get_post_meta( $post_id, Document_Meta_Box::META_KEY_SUBJECT, true ), 'El asunto debe permanecer igual.' );
-		$this->assertSame( 'Autor original', get_post_meta( $post_id, Document_Meta_Box::META_KEY_AUTHOR, true ), 'El autor debe permanecer igual.' );
-		$this->assertSame( 'uno', get_post_meta( $post_id, Document_Meta_Box::META_KEY_KEYWORDS, true ), 'Las palabras clave deben permanecer igual.' );
+		$this->assertSame( 'Original', get_post_meta( $post_id, Document_Meta_Box::META_KEY_SUBJECT, true ), 'Subject must remain the same.' );
+		$this->assertSame( 'Autor original', get_post_meta( $post_id, Document_Meta_Box::META_KEY_AUTHOR, true ), 'Author must remain the same.' );
+		$this->assertSame( 'uno', get_post_meta( $post_id, Document_Meta_Box::META_KEY_KEYWORDS, true ), 'Keywords must remain the same.' );
 	}
 }

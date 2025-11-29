@@ -33,7 +33,7 @@ class DocumentateDocumentTypeSeedingTest extends WP_UnitTestCase {
         $this->assertSame( 'documentate-demo-odt', get_term_meta( $odt->term_id, '_documentate_fixture', true ) );
         $odt_schema = $storage->get_schema( $odt->term_id );
         $this->assertIsArray( $odt_schema );
-        $this->assertSame( 2, $odt_schema['version'], 'El esquema básico ODT debe ser de la versión 2.' );
+        $this->assertSame( 2, $odt_schema['version'], 'Basic ODT schema must be version 2.' );
 		$this->assertSchemaHasFields( $odt_schema, array( 'antecedentes', 'resuelvo', 'fundamentos', 'objeto', 'post_title' ) );
 
         $docx = get_term_by( 'slug', 'documentate-demo-docx', 'documentate_doc_type' );
@@ -41,21 +41,21 @@ class DocumentateDocumentTypeSeedingTest extends WP_UnitTestCase {
         $this->assertSame( 'documentate-demo-docx', get_term_meta( $docx->term_id, '_documentate_fixture', true ) );
         $docx_schema = $storage->get_schema( $docx->term_id );
         $this->assertIsArray( $docx_schema );
-        $this->assertSame( 2, $docx_schema['version'], 'El esquema básico DOCX debe ser de la versión 2.' );
+        $this->assertSame( 2, $docx_schema['version'], 'Basic DOCX schema must be version 2.' );
 		$this->assertSchemaHasFields( $docx_schema, array( 'antecedentes', 'resuelvo', 'fundamentos', 'objeto', 'post_title' ) );
 
         $advanced_odt = get_term_by( 'slug', 'documentate-demo-wp-documentate-odt', 'documentate_doc_type' );
         $this->assertInstanceOf( WP_Term::class, $advanced_odt );
         $advanced_odt_schema = $storage->get_schema( $advanced_odt->term_id );
         $this->assertIsArray( $advanced_odt_schema );
-        $this->assertSame( 2, $advanced_odt_schema['version'], 'El esquema avanzado ODT debe ser de la versión 2.' );
+        $this->assertSame( 2, $advanced_odt_schema['version'], 'Advanced ODT schema must be version 2.' );
 
         $fixture_extractor = new SchemaExtractor();
         $fixture_schema    = $fixture_extractor->extract( dirname( __FILE__, 4 ) . '/fixtures/demo-wp-documentate.odt' );
-        $this->assertNotWPError( $fixture_schema, 'La plantilla de fixtures ODT debe analizarse sin errores.' );
+        $this->assertNotWPError( $fixture_schema, 'ODT fixture template must be parsed without errors.' );
         $fixture_fields    = $this->index_fields_from_schema( $fixture_schema );
         $fixture_repeaters = $this->index_repeaters_from_schema( $fixture_schema );
-        $this->assertArrayHasKey( 'items', $fixture_repeaters, 'El fixture debe contener el bloque repetible items.' );
+        $this->assertArrayHasKey( 'items', $fixture_repeaters, 'Fixture must contain the items repeater block.' );
 
         $this->assertSchemaFieldMatches(
             $advanced_odt_schema,
@@ -99,11 +99,11 @@ class DocumentateDocumentTypeSeedingTest extends WP_UnitTestCase {
         $this->assertInstanceOf( WP_Term::class, $advanced_docx );
         $advanced_docx_schema = $storage->get_schema( $advanced_docx->term_id );
         $this->assertIsArray( $advanced_docx_schema );
-        $this->assertSame( 2, $advanced_docx_schema['version'], 'El esquema avanzado DOCX debe ser de la versión 2.' );
+        $this->assertSame( 2, $advanced_docx_schema['version'], 'Advanced DOCX schema must be version 2.' );
         $this->assertRepeaterHasFields( $advanced_docx_schema, 'items', array_keys( $fixture_repeaters['items'] ) );
 
         $converted_schema = Documentate_Documents::get_term_schema( $advanced_odt->term_id );
-        $this->assertIsArray( $converted_schema, 'El CPT debe poder leer el esquema almacenado.' );
+        $this->assertIsArray( $converted_schema, 'CPT must be able to read the stored schema.' );
         $this->assertNotEmpty( $converted_schema );
 
         documentate_maybe_seed_default_doc_types();
@@ -190,15 +190,15 @@ class DocumentateDocumentTypeSeedingTest extends WP_UnitTestCase {
             }
         }
 
-        $this->assertArrayHasKey( $slug, $indexed, sprintf( 'El campo %s debe existir.', $slug ) );
+        $this->assertArrayHasKey( $slug, $indexed, sprintf( 'Field %s must exist.', $slug ) );
         foreach ( $expected as $key => $value ) {
-            $this->assertArrayHasKey( $key, $indexed[ $slug ], sprintf( 'El campo %s debe incluir la clave %s.', $slug, $key ) );
+            $this->assertArrayHasKey( $key, $indexed[ $slug ], sprintf( 'Field %s must include key %s.', $slug, $key ) );
             $actual_value = $indexed[ $slug ][ $key ];
             if ( 'pattern' === $key ) {
                 $value        = $this->normalize_pattern( $value );
                 $actual_value = $this->normalize_pattern( $actual_value );
             }
-            $this->assertSame( $value, $actual_value, sprintf( 'El campo %s no coincide en la clave %s.', $slug, $key ) );
+            $this->assertSame( $value, $actual_value, sprintf( 'Field %s does not match on key %s.', $slug, $key ) );
         }
     }
 
@@ -219,7 +219,7 @@ class DocumentateDocumentTypeSeedingTest extends WP_UnitTestCase {
             }
         }
 
-        $this->assertArrayHasKey( $slug, $indexed, sprintf( 'El bloque %s debe existir.', $slug ) );
+        $this->assertArrayHasKey( $slug, $indexed, sprintf( 'Block %s must exist.', $slug ) );
 
         $fields = isset( $indexed[ $slug ]['fields'] ) && is_array( $indexed[ $slug ]['fields'] ) ? $indexed[ $slug ]['fields'] : array();
         $slugs  = array();
@@ -232,20 +232,20 @@ class DocumentateDocumentTypeSeedingTest extends WP_UnitTestCase {
         $expected = array_values( $expected );
         sort( $expected );
 
-        $this->assertSame( $expected, $slugs, sprintf( 'El bloque %s no contiene los campos esperados.', $slug ) );
+        $this->assertSame( $expected, $slugs, sprintf( 'Block %s does not contain the expected fields.', $slug ) );
     }
 
     /**
-     * Normaliza patrones para comparar cadenas equivalentes.
+     * Normalize patterns to compare equivalent strings.
      *
-     * @param string $pattern Patrón original.
+     * @param string $pattern Original pattern.
      * @return string
      */
     private function normalize_pattern( $pattern ) {
         $pattern = (string) $pattern;
-        // Unifica escapes redundantes en puntos y guiones.
+        // Unify redundant escapes in dots and hyphens.
         $pattern = str_replace( array( '\.', '\-' ), array( '.', '-' ), $pattern );
-        // Normaliza secuencias duplicadas de llaves.
+        // Normalize duplicate brace sequences.
         $pattern = str_replace( array( '{2,}', '{{2,}}' ), '{2,}', $pattern );
         return $pattern;
     }

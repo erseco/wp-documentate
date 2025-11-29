@@ -15,54 +15,54 @@ class SchemaExtractorTest extends WP_UnitTestCase {
 		$extractor = new SchemaExtractor();
 		$schema    = $extractor->extract( dirname( __FILE__, 4 ) . '/fixtures/demo-wp-documentate.odt' );
 
-		$this->assertNotWPError( $schema, 'Se esperaba un esquema válido al analizar la plantilla demo ODT.' );
+		$this->assertNotWPError( $schema, 'Expected a valid schema when parsing the demo ODT template.' );
 		$this->assertIsArray( $schema );
-		$this->assertSame( 2, $schema['version'], 'La versión del esquema debe ser 2.' );
-		$this->assertSame( 'odt', $schema['meta']['template_type'], 'El tipo de plantilla detectado debe ser odt.' );
+		$this->assertSame( 2, $schema['version'], 'Schema version must be 2.' );
+		$this->assertSame( 'odt', $schema['meta']['template_type'], 'Detected template type must be odt.' );
 
 		$fields = $this->index_fields( $schema['fields'] );
 
-		$this->assertArrayHasKey( 'nombrecompleto', $fields, 'El campo Nombre completo debe existir.' );
+		$this->assertArrayHasKey( 'nombrecompleto', $fields, 'Full name field must exist.' );
 		$this->assertSame( 'text', $fields['nombrecompleto']['type'] );
 		$this->assertSame( 'Tu nombre y apellidos', $fields['nombrecompleto']['placeholder'] );
 		$this->assertSame( '120', $fields['nombrecompleto']['length'] );
 
-		$this->assertArrayHasKey( 'email', $fields, 'El campo Email debe existir.' );
+		$this->assertArrayHasKey( 'email', $fields, 'Email field must exist.' );
 		$this->assertSame( 'email', $fields['email']['type'] );
 		$this->assertSame(
-			'Introduce un email válido (usuario@dominio.tld)',
+			'Enter a valid email (user@domain.tld)',
 			$fields['email']['patternmsg']
 		);
 
-		$this->assertArrayHasKey( 'telfono', $fields, 'El campo Teléfono debe existir.' );
+		$this->assertArrayHasKey( 'telfono', $fields, 'Phone field must exist.' );
 		$this->assertSame( '^[+]?[1-9][0-9]{1,14}$', $fields['telfono']['pattern'] );
 		$this->assertSame( 'Formato de teléfono no válido', $fields['telfono']['patternmsg'] );
 
-		$this->assertArrayHasKey( 'unidades', $fields, 'El campo Unidades debe existir.' );
+		$this->assertArrayHasKey( 'unidades', $fields, 'Units field must exist.' );
 		$this->assertSame( 'number', $fields['unidades']['type'] );
 		$this->assertSame( '0', $fields['unidades']['minvalue'] );
 		$this->assertSame( '20', $fields['unidades']['maxvalue'] );
 
-		$this->assertArrayHasKey( 'observaciones', $fields, 'El campo Observaciones debe existir.' );
+		$this->assertArrayHasKey( 'observaciones', $fields, 'Observations field must exist.' );
 		$this->assertSame( 'textarea', $fields['observaciones']['type'] );
 
-		$this->assertArrayHasKey( 'web', $fields, 'El campo web debe existir.' );
+		$this->assertArrayHasKey( 'web', $fields, 'Web field must exist.' );
 		$this->assertSame( 'url', $fields['web']['type'] );
 
-		$this->assertArrayHasKey( 'datelimit', $fields, 'El campo Fecha límite debe existir.' );
+		$this->assertArrayHasKey( 'datelimit', $fields, 'Date limit field must exist.' );
 		$this->assertSame( 'date', $fields['datelimit']['type'] );
 		$this->assertSame( '2025-01-01', $fields['datelimit']['minvalue'] );
 		$this->assertSame( '2030-12-31', $fields['datelimit']['maxvalue'] );
 
 		$repeaters = $this->index_repeaters( $schema['repeaters'] );
-		$this->assertArrayHasKey( 'items', $repeaters, 'El bloque repetible items debe existir.' );
-		$this->assertArrayHasKey( 'title', $repeaters['items'], 'El campo de título del ítem debe existir.' );
+		$this->assertArrayHasKey( 'items', $repeaters, 'Repeater block items must exist.' );
+		$this->assertArrayHasKey( 'title', $repeaters['items'], 'Item title field must exist.' );
 		$this->assertSame( 'text', $repeaters['items']['title']['type'] );
-		$this->assertArrayHasKey( 'content', $repeaters['items'], 'El campo HTML del ítem debe existir.' );
+		$this->assertArrayHasKey( 'content', $repeaters['items'], 'Item HTML field must exist.' );
 		$this->assertSame( 'html', $repeaters['items']['content']['type'] );
 
 		$legacy = SchemaConverter::to_legacy( $schema );
-		$this->assertIsArray( $legacy, 'La conversión a legado debe crear una matriz.' );
+		$this->assertIsArray( $legacy, 'Legacy conversion must return an array.' );
 		$this->assertNotEmpty( $legacy );
 		$legacy_items = null;
 		foreach ( $legacy as $entry ) {
@@ -71,7 +71,7 @@ class SchemaExtractorTest extends WP_UnitTestCase {
 				break;
 			}
 		}
-		$this->assertNotNull( $legacy_items, 'El bloque repetible debe mantenerse en la conversión legado.' );
+		$this->assertNotNull( $legacy_items, 'Repeater block must be preserved in legacy conversion.' );
 		$this->assertArrayHasKey( 'item_schema', $legacy_items );
 		$this->assertArrayHasKey( 'content', $legacy_items['item_schema'] );
 		$this->assertSame( 'rich', $legacy_items['item_schema']['content']['type'] );
@@ -84,54 +84,54 @@ class SchemaExtractorTest extends WP_UnitTestCase {
 		$extractor = new SchemaExtractor();
 		$schema    = $extractor->extract( dirname( __FILE__, 4 ) . '/fixtures/demo-wp-documentate.docx' );
 
-		$this->assertNotWPError( $schema, 'Se esperaba un esquema válido al analizar la plantilla demo DOCX.' );
+		$this->assertNotWPError( $schema, 'Expected a valid schema when parsing the demo DOCX template.' );
 		$this->assertIsArray( $schema );
-		$this->assertSame( 2, $schema['version'], 'La versión del esquema debe ser 2.' );
-		$this->assertSame( 'docx', $schema['meta']['template_type'], 'El tipo de plantilla detectado debe ser docx.' );
+		$this->assertSame( 2, $schema['version'], 'Schema version must be 2.' );
+		$this->assertSame( 'docx', $schema['meta']['template_type'], 'Detected template type must be docx.' );
 
 		$fields = $this->index_fields( $schema['fields'] );
 
-		$this->assertArrayHasKey( 'nombrecompleto', $fields, 'El campo Nombre completo debe existir.' );
+		$this->assertArrayHasKey( 'nombrecompleto', $fields, 'Full name field must exist.' );
 		$this->assertSame( 'text', $fields['nombrecompleto']['type'] );
 		$this->assertSame( 'Tu nombre y apellidos', $fields['nombrecompleto']['placeholder'] );
 		$this->assertSame( '120', $fields['nombrecompleto']['length'] );
 
-		$this->assertArrayHasKey( 'email', $fields, 'El campo Email debe existir.' );
+		$this->assertArrayHasKey( 'email', $fields, 'Email field must exist.' );
 		$this->assertSame( 'email', $fields['email']['type'] );
 		$this->assertSame(
-			'Introduce un email válido (usuario@dominio.tld)',
+			'Enter a valid email (user@domain.tld)',
 			$fields['email']['patternmsg']
 		);
 
-		$this->assertArrayHasKey( 'telfono', $fields, 'El campo Teléfono debe existir.' );
+		$this->assertArrayHasKey( 'telfono', $fields, 'Phone field must exist.' );
 		$this->assertSame( '^[+]?[1-9][0-9]{1,14}$', $fields['telfono']['pattern'] );
 		$this->assertSame( 'Formato de teléfono no válido', $fields['telfono']['patternmsg'] );
 
-		$this->assertArrayHasKey( 'unidades', $fields, 'El campo Unidades debe existir.' );
+		$this->assertArrayHasKey( 'unidades', $fields, 'Units field must exist.' );
 		$this->assertSame( 'number', $fields['unidades']['type'] );
 		$this->assertSame( '0', $fields['unidades']['minvalue'] );
 		$this->assertSame( '20', $fields['unidades']['maxvalue'] );
 
-		$this->assertArrayHasKey( 'observaciones', $fields, 'El campo Observaciones debe existir.' );
+		$this->assertArrayHasKey( 'observaciones', $fields, 'Observations field must exist.' );
 		$this->assertSame( 'textarea', $fields['observaciones']['type'] );
 
-		$this->assertArrayHasKey( 'web', $fields, 'El campo web debe existir.' );
+		$this->assertArrayHasKey( 'web', $fields, 'Web field must exist.' );
 		$this->assertSame( 'url', $fields['web']['type'] );
 
-		$this->assertArrayHasKey( 'datelimit', $fields, 'El campo Fecha límite debe existir.' );
+		$this->assertArrayHasKey( 'datelimit', $fields, 'Date limit field must exist.' );
 		$this->assertSame( 'date', $fields['datelimit']['type'] );
 		$this->assertSame( '2025-01-01', $fields['datelimit']['minvalue'] );
 		$this->assertSame( '2030-12-31', $fields['datelimit']['maxvalue'] );
 
 		$repeaters = $this->index_repeaters( $schema['repeaters'] );
-		$this->assertArrayHasKey( 'items', $repeaters, 'El bloque repetible items debe existir.' );
-		$this->assertArrayHasKey( 'title', $repeaters['items'], 'El campo de título del ítem debe existir.' );
+		$this->assertArrayHasKey( 'items', $repeaters, 'Repeater block items must exist.' );
+		$this->assertArrayHasKey( 'title', $repeaters['items'], 'Item title field must exist.' );
 		$this->assertSame( 'text', $repeaters['items']['title']['type'] );
-		$this->assertArrayHasKey( 'content', $repeaters['items'], 'El campo HTML del ítem debe existir.' );
+		$this->assertArrayHasKey( 'content', $repeaters['items'], 'Item HTML field must exist.' );
 		$this->assertSame( 'html', $repeaters['items']['content']['type'] );
 
 		$legacy = SchemaConverter::to_legacy( $schema );
-		$this->assertIsArray( $legacy, 'La conversión a legado debe crear una matriz.' );
+		$this->assertIsArray( $legacy, 'Legacy conversion must return an array.' );
 		$this->assertNotEmpty( $legacy );
 		$legacy_items = null;
 		foreach ( $legacy as $entry ) {
@@ -140,7 +140,7 @@ class SchemaExtractorTest extends WP_UnitTestCase {
 				break;
 			}
 		}
-		$this->assertNotNull( $legacy_items, 'El bloque repetible debe mantenerse en la conversión legado.' );
+		$this->assertNotNull( $legacy_items, 'Repeater block must be preserved in legacy conversion.' );
 		$this->assertArrayHasKey( 'item_schema', $legacy_items );
 		$this->assertArrayHasKey( 'content', $legacy_items['item_schema'] );
 		$this->assertSame( 'rich', $legacy_items['item_schema']['content']['type'] );
