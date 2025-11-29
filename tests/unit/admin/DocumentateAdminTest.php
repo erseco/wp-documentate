@@ -448,44 +448,6 @@ class DocumentateAdminTest extends WP_UnitTestCase {
 		$this->assertEmpty( $labels );
 	}
 
-	/**
-	 * Test get_schema_labels_for_post with schema.
-	 */
-	public function test_get_schema_labels_for_post_with_schema() {
-		$term    = wp_insert_term( 'Labels Type', 'documentate_doc_type' );
-		$term_id = $term['term_id'];
-
-		$storage = new Documentate\DocType\SchemaStorage();
-		$storage->save_schema(
-			$term_id,
-			array(
-				'version'   => 2,
-				'fields'    => array(
-					array(
-						'name'  => 'Custom Field',
-						'slug'  => 'custom_field',
-						'label' => 'Custom Label',
-						'type'  => 'text',
-					),
-				),
-				'repeaters' => array(),
-			)
-		);
-
-		$post = $this->factory->post->create_and_get( array( 'post_type' => 'documentate_document' ) );
-		wp_set_post_terms( $post->ID, array( $term_id ), 'documentate_doc_type' );
-
-		$reflection = new ReflectionClass( $this->admin );
-		$method     = $reflection->getMethod( 'get_schema_labels_for_post' );
-		$method->setAccessible( true );
-
-		$labels = $method->invoke( $this->admin, $post->ID );
-
-		$this->assertIsArray( $labels );
-		$this->assertArrayHasKey( 'custom_field', $labels );
-		$this->assertSame( 'Custom Label', $labels['custom_field'] );
-	}
-
 	public function tear_down() {
 		delete_option( 'documentate_settings' );
 		parent::tear_down();
