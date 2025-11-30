@@ -817,6 +817,13 @@ class Documentate_Admin_Helper {
 		if ( $zetajs_cdn_available ) {
 			$config['cdnMode']      = true;
 			$config['converterUrl'] = admin_url( 'admin-post.php?action=documentate_converter' );
+
+			// Detect WordPress Playground environment.
+			// In Playground, popups are blocked so we use iframe mode instead.
+			require_once plugin_dir_path( __DIR__ ) . 'includes/class-documentate-collabora-converter.php';
+			$is_playground          = Documentate_Collabora_Converter::is_playground();
+			$config['isPlayground'] = $is_playground;
+			$config['useIframe']    = $is_playground;
 		}
 
 		wp_localize_script( 'documentate-actions', 'documentateActionsConfig', $config );
