@@ -482,9 +482,6 @@ msgstr ""
 msgid "Could not save the converted file to disk."
 msgstr ""
 
-msgid "WordPress Playground has limitations with external HTTP requests. Consider using ZetaJS (CDN mode) as conversion engine."
-msgstr ""
-
 msgid "Collabora Online"
 msgstr ""
 

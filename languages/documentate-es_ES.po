@@ -483,9 +483,6 @@ msgstr "Collabora Online devolvió el código HTTP %d durante la conversión."
 msgid "Could not save the converted file to disk."
 msgstr "No se pudo guardar el fichero convertido en el disco."
 
-msgid "WordPress Playground has limitations with external HTTP requests. Consider using ZetaJS (CDN mode) as conversion engine."
-msgstr "WordPress Playground tiene limitaciones con peticiones HTTP externas. Considera usar ZetaJS (modo CDN) como motor de conversión."
-
 msgid "Collabora Online"
 msgstr "Collabora Online"
 
