@@ -350,16 +350,16 @@
 	}
 
 	/**
-	 * Handle conversion using external converter service via POST form.
-	 * Submits a form with target="_blank" to open converter in new tab with file data.
-	 * This approach avoids URL length limits and COOP/COEP cross-origin restrictions.
+	 * Handle conversion using external converter service via window.opener + postMessage.
+	 * Opens converter in new tab which captures document via postMessage BEFORE COI reload.
 	 *
 	 * Flow:
 	 * 1. Generate source document via AJAX
 	 * 2. Download the generated document
-	 * 3. Create hidden form with file and submit to converter with target="_blank"
-	 * 4. Converter's Service Worker receives POST, stores file, redirects with postData=true
-	 * 5. Converter processes and shows result in new tab
+	 * 3. Open converter with ?receive=opener (tells it to wait for data)
+	 * 4. Converter's early capture script receives document BEFORE Service Worker reload
+	 * 5. Document is stored in sessionStorage, survives COI reload
+	 * 6. After reload with COI enabled, converter processes stored document
 	 *
 	 * @param {jQuery} $btn         The button element.
 	 * @param {string} action       Action type (preview, download).
@@ -367,6 +367,8 @@
 	 * @param {string} sourceFormat Source format.
 	 */
 	async function handleExternalConverterConversion($btn, action, targetFormat, sourceFormat) {
+		let converterWindow = null;
+
 		try {
 			// Step 1: Generate source document via AJAX
 			updateModal(
@@ -402,68 +404,80 @@
 			if (!docResponse.ok) {
 				throw new Error('Failed to download source document');
 			}
-			const docBlob = await docResponse.blob();
+			const docBuffer = await docResponse.arrayBuffer();
 
-			// Step 3: Create hidden form and submit via POST to new tab
+			// Step 3: Open converter in new tab with receive=opener mode
 			updateModal(
 				strings.loadingWasm || 'Opening converter...',
-				'A new tab will open with the converter. Please wait for the conversion.'
+				'A new tab will open. Sending document...'
 			);
 
-			// Create form element
-			const postForm = document.createElement('form');
-			postForm.method = 'POST';
-			postForm.action = config.externalConverterUrl;
-			postForm.enctype = 'multipart/form-data';
-			postForm.target = '_blank'; // Open in new tab
-			postForm.style.display = 'none';
+			// Build URL with opener mode parameters
+			const queryParams = new URLSearchParams({
+				receive: 'opener',
+				format: targetFormat,
+				name: 'documento.' + sourceFormat,
+				fullscreen: action === 'preview' ? 'true' : 'false',
+				download: action !== 'preview' ? 'true' : 'false'
+			});
 
-			// Create file input with the document blob
-			const fileInput = document.createElement('input');
-			fileInput.type = 'file';
-			fileInput.name = 'file';
+			const converterUrl = config.externalConverterUrl + '?' + queryParams.toString();
 
-			// Create a File object from the blob
-			const filename = 'documento.' + sourceFormat;
-			const file = new File([docBlob], filename, { type: docBlob.type });
+			// Open the converter window - the page will signal when ready
+			converterWindow = window.open(converterUrl, 'documentate_converter');
 
-			// Use DataTransfer to set the file (workaround for programmatic file setting)
-			const dataTransfer = new DataTransfer();
-			dataTransfer.items.add(file);
-			fileInput.files = dataTransfer.files;
-			postForm.appendChild(fileInput);
-
-			// Add format parameter
-			const formatInput = document.createElement('input');
-			formatInput.type = 'hidden';
-			formatInput.name = 'format';
-			formatInput.value = targetFormat;
-			postForm.appendChild(formatInput);
-
-			// Add fullscreen parameter for preview, download for other actions
-			if (action === 'preview') {
-				const fullscreenInput = document.createElement('input');
-				fullscreenInput.type = 'hidden';
-				fullscreenInput.name = 'fullscreen';
-				fullscreenInput.value = 'true';
-				postForm.appendChild(fullscreenInput);
-			} else {
-				const downloadInput = document.createElement('input');
-				downloadInput.type = 'hidden';
-				downloadInput.name = 'download';
-				downloadInput.value = 'true';
-				postForm.appendChild(downloadInput);
+			if (!converterWindow) {
+				throw new Error('Could not open converter window. Please allow popups for this site.');
 			}
 
-			// Append form to body, submit, and remove
-			document.body.appendChild(postForm);
-			postForm.submit();
-			document.body.removeChild(postForm);
+			// Step 4: Wait for converter to signal ready (pre-COI), then send document
+			const documentSent = await new Promise((resolve, reject) => {
+				const timeout = setTimeout(() => {
+					window.removeEventListener('message', readyHandler);
+					reject(new Error('Converter did not respond in time. Please try again.'));
+				}, 30000); // 30 seconds timeout for initial ready signal
+
+				const readyHandler = (event) => {
+					if (!event.data || !event.data.type) return;
+
+					if (event.data.type === 'converterReady') {
+						console.log('Documentate: Converter ready (preCOI:', event.data.preCOI, '), sending document...');
+
+						// Send the document immediately
+						if (converterWindow && !converterWindow.closed) {
+							converterWindow.postMessage({
+								type: 'convertDocument',
+								buffer: docBuffer,
+								name: 'documento.' + sourceFormat,
+								format: targetFormat,
+								fullscreen: action === 'preview',
+								download: action !== 'preview'
+							}, '*');
+						}
+
+						// Don't resolve yet - wait for documentReceived confirmation
+					} else if (event.data.type === 'documentReceived') {
+						clearTimeout(timeout);
+						window.removeEventListener('message', readyHandler);
+						console.log('Documentate: Document received by converter');
+						resolve(true);
+					}
+				};
+
+				window.addEventListener('message', readyHandler);
+			});
+
+			if (documentSent) {
+				updateModal(
+					strings.convertingBrowser || 'Converting...',
+					'Document sent. Conversion will complete in the new tab.'
+				);
+			}
 
 			// Hide modal after a short delay - conversion happens in the new tab
 			setTimeout(function() {
 				hideModal();
-			}, 1500);
+			}, 2000);
 
 		} catch (error) {
 			console.error('Documentate external conversion error:', error);
