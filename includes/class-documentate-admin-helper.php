@@ -597,8 +597,11 @@ class Documentate_Admin_Helper {
 				'data-documentate-action' => 'preview',
 				'data-documentate-format' => 'pdf',
 			);
-			// In popup mode (CDN or Playground with Collabora), add attributes for browser-based conversion.
-			if ( $use_popup_for_conversion && ! $conversion_ready ) {
+			// Use popup for browser-based conversion:
+			// - ZetaJS CDN mode when no server conversion is available
+			// - Collabora in Playground (always, to bypass wp_remote_post multipart issues).
+			$needs_popup = ( $zetajs_cdn_available && ! $conversion_ready ) || $collabora_in_playground;
+			if ( $needs_popup ) {
 				$preview_attrs['data-documentate-cdn-mode']      = '1';
 				$preview_attrs['data-documentate-source-format'] = $source_format;
 			}
@@ -644,9 +647,11 @@ class Documentate_Admin_Helper {
 					'data-documentate-action' => 'download',
 					'data-documentate-format' => $format,
 				);
-				// In popup mode (CDN or Playground with Collabora), add attributes for browser-based conversion.
-				// Conversion is needed if target format differs from source template.
-				$needs_popup_conversion = $use_popup_for_conversion && ! $conversion_ready && $format !== $source_format;
+				// Use popup for browser-based conversion when format differs from source:
+				// - ZetaJS CDN mode when no server conversion is available
+				// - Collabora in Playground (always, to bypass wp_remote_post multipart issues).
+				$needs_popup_base       = ( $zetajs_cdn_available && ! $conversion_ready ) || $collabora_in_playground;
+				$needs_popup_conversion = $needs_popup_base && $format !== $source_format;
 				if ( $needs_popup_conversion ) {
 					$attrs['data-documentate-cdn-mode']      = '1';
 					$attrs['data-documentate-source-format'] = $source_format;
@@ -833,10 +838,11 @@ class Documentate_Admin_Helper {
 			),
 		);
 
-		// If popup conversion is available (CDN mode or Collabora in Playground), add converter URL.
-		// The converter runs in a popup. For ZetaJS it needs COOP/COEP headers for SharedArrayBuffer.
-		// For Collabora in Playground, it uses JavaScript fetch to bypass wp_remote_post issues.
-		if ( $use_popup_for_conversion ) {
+		// Use popup when:
+		// - ZetaJS CDN mode and no server conversion available
+		// - Collabora in Playground (always, to bypass wp_remote_post multipart issues).
+		$needs_popup = ( $zetajs_cdn_available && ! $conversion_ready ) || $collabora_in_playground;
+		if ( $needs_popup ) {
 			$config['cdnMode']      = true;
 			$config['converterUrl'] = admin_url( 'admin-post.php?action=documentate_converter' );
 		}
