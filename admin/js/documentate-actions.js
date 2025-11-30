@@ -350,179 +350,12 @@
 	}
 
 	/**
-	 * External converter iframe reference and state.
-	 * The iframe is pre-loaded when the page loads to speed up conversions.
-	 */
-	let externalConverterIframe = null;
-	let externalConverterReady = false;
-	let externalConverterOrigin = null;
-
-	/**
-	 * Initialize external converter iframe for WordPress Playground.
-	 * Pre-loads the converter so it's ready when the user needs it.
-	 * Uses 'credentialless' attribute for potential cross-origin isolation.
-	 */
-	function initExternalConverter() {
-		if (!config.externalConverterUrl || externalConverterIframe) {
-			return;
-		}
-
-		try {
-			externalConverterOrigin = new URL(config.externalConverterUrl).origin;
-		} catch (e) {
-			console.error('Documentate: Invalid external converter URL');
-			return;
-		}
-
-		console.log('Documentate: Pre-loading external converter iframe...');
-
-		externalConverterIframe = document.createElement('iframe');
-		externalConverterIframe.id = 'documentate-external-converter';
-		externalConverterIframe.src = config.externalConverterUrl;
-
-		// Use credentialless for potential cross-origin isolation benefits
-		// This is a newer attribute that may help with SharedArrayBuffer
-		externalConverterIframe.credentialless = true;
-		externalConverterIframe.setAttribute('credentialless', '');
-
-		// Allow necessary features
-		externalConverterIframe.allow = 'cross-origin-isolated';
-
-		// Hidden but with enough size for canvas operations
-		externalConverterIframe.style.cssText = 'position:fixed;width:100px;height:100px;left:-9999px;top:-9999px;border:none;opacity:0;pointer-events:none;';
-
-		document.body.appendChild(externalConverterIframe);
-
-		console.log('Documentate: External converter iframe created, waiting for ready signal...');
-	}
-
-	/**
-	 * Initialize listener for external converter messages.
-	 */
-	function initExternalConverterListener() {
-		window.addEventListener('message', function (event) {
-			// Only process messages from external converter
-			if (!externalConverterOrigin || event.origin !== externalConverterOrigin) {
-				return;
-			}
-
-			const { type, blob, error, ready } = event.data;
-
-			console.log('Documentate: External converter message:', type, event.data);
-
-			// Handle ready signal
-			if (type === 'ready') {
-				externalConverterReady = true;
-				console.log('Documentate: External converter is READY for conversions');
-				return;
-			}
-
-			// Handle pong (response to ping)
-			if (type === 'pong') {
-				if (ready) {
-					externalConverterReady = true;
-					console.log('Documentate: External converter confirmed ready via pong');
-				}
-				return;
-			}
-
-			// Handle conversion result
-			if (type === 'result' && blob && pendingConversion) {
-				handleExternalConversionResult(blob, pendingConversion.action, pendingConversion.format);
-				pendingConversion = null;
-				return;
-			}
-
-			// Handle error
-			if (type === 'error') {
-				console.error('Documentate: External converter error:', error);
-				if (pendingConversion) {
-					showError(error || strings.errorGeneric || 'Conversion error.');
-					pendingConversion = null;
-				}
-				return;
-			}
-		});
-	}
-
-	/**
-	 * Handle successful conversion from external converter.
-	 *
-	 * @param {Blob}   blob   The converted document blob.
-	 * @param {string} action Action type (preview, download).
-	 * @param {string} format Target format.
-	 */
-	function handleExternalConversionResult(blob, action, format) {
-		const blobUrl = URL.createObjectURL(blob);
-
-		if (action === 'preview' && format === 'pdf') {
-			// For preview, create an object tag or download
-			// window.open might be blocked in Playground
-			const a = document.createElement('a');
-			a.href = blobUrl;
-			a.target = '_blank';
-			a.rel = 'noopener';
-			document.body.appendChild(a);
-			a.click();
-			document.body.removeChild(a);
-		} else {
-			// Trigger download
-			const a = document.createElement('a');
-			a.href = blobUrl;
-			a.download = 'documento.' + format;
-			document.body.appendChild(a);
-			a.click();
-			document.body.removeChild(a);
-
-			setTimeout(function () {
-				URL.revokeObjectURL(blobUrl);
-			}, 1000);
-		}
-
-		hideModal();
-	}
-
-	/**
-	 * Wait for the external converter to be ready.
-	 *
-	 * @param {number} timeoutMs Maximum time to wait in milliseconds.
-	 * @returns {Promise<boolean>} True if ready, false if timeout.
-	 */
-	async function waitForExternalConverterReady(timeoutMs = 120000) {
-		if (externalConverterReady) {
-			return true;
-		}
-
-		const startTime = Date.now();
-		const pollInterval = 1000;
-
-		while (Date.now() - startTime < timeoutMs) {
-			// Send ping to check if ready
-			if (externalConverterIframe && externalConverterIframe.contentWindow) {
-				try {
-					externalConverterIframe.contentWindow.postMessage({
-						type: 'ping',
-						requestId: 'poll_' + Date.now()
-					}, externalConverterOrigin);
-				} catch (e) {
-					// Iframe might not be ready yet
-				}
-			}
-
-			// Wait and check
-			await new Promise(resolve => setTimeout(resolve, pollInterval));
-
-			if (externalConverterReady) {
-				return true;
-			}
-		}
-
-		return false;
-	}
-
-	/**
-	 * Handle conversion using external converter service via iframe.
-	 * Used in WordPress Playground where popups don't work.
+	 * Handle conversion using external converter service.
+	 * Opens the converter in a new tab with the file encoded in the URL hash.
+	 * This works in WordPress Playground because:
+	 * - The new tab has its own context with Cross-Origin Isolation
+	 * - No iframe/popup restrictions apply
+	 * - The converter's Service Worker can enable SharedArrayBuffer
 	 *
 	 * @param {jQuery} $btn         The button element.
 	 * @param {string} action       Action type (preview, download).
@@ -531,11 +364,6 @@
 	 */
 	async function handleExternalConverterConversion($btn, action, targetFormat, sourceFormat) {
 		try {
-			// Ensure iframe is created
-			if (!externalConverterIframe) {
-				initExternalConverter();
-			}
-
 			// Step 1: Generate source document via AJAX
 			updateModal(
 				strings.generating || 'Generating document...',
@@ -572,63 +400,54 @@
 			}
 			const docBuffer = await docResponse.arrayBuffer();
 
-			// Step 3: Wait for converter to be ready
+			// Step 3: Convert ArrayBuffer to base64
 			updateModal(
-				strings.loadingWasm || 'Loading LibreOffice...',
-				'Downloading WASM (~50MB). This may take a while the first time.'
+				strings.loadingWasm || 'Preparing document...',
+				'Encoding for converter...'
 			);
 
-			const isReady = await waitForExternalConverterReady(120000);
-			if (!isReady) {
-				throw new Error('Converter initialization timeout. The LibreOffice WASM module may not be compatible with this environment.');
+			const bytes = new Uint8Array(docBuffer);
+			let binary = '';
+			for (let i = 0; i < bytes.length; i++) {
+				binary += String.fromCharCode(bytes[i]);
+			}
+			const base64Data = btoa(binary);
+
+			// Check file size - warn if too large (> 2MB encoded is ~1.5MB original)
+			if (base64Data.length > 2 * 1024 * 1024) {
+				console.warn('Documentate: Document is large (' + Math.round(base64Data.length / 1024) + 'KB encoded). URL might be too long for some browsers.');
 			}
 
-			// Step 4: Send document to converter
-			updateModal(
-				strings.convertingBrowser || 'Converting...',
-				'Processing with LibreOffice WASM...'
-			);
-
-			// Set up result handler with promise
-			const resultPromise = new Promise((resolve, reject) => {
-				const timeout = setTimeout(() => {
-					reject(new Error('Conversion timeout (120s)'));
-				}, 120000);
-
-				const resultHandler = (event) => {
-					if (event.origin !== externalConverterOrigin) return;
-
-					if (event.data.type === 'result') {
-						clearTimeout(timeout);
-						window.removeEventListener('message', resultHandler);
-						resolve(event.data);
-					} else if (event.data.type === 'error') {
-						clearTimeout(timeout);
-						window.removeEventListener('message', resultHandler);
-						reject(new Error(event.data.error || 'Conversion failed'));
-					}
-				};
-
-				window.addEventListener('message', resultHandler);
+			// Step 4: Build converter URL with file in hash
+			// Format: #file=BASE64&format=pdf&action=preview&filename=document.odt
+			const hashParams = new URLSearchParams({
+				file: base64Data,
+				format: targetFormat,
+				action: action,
+				filename: 'documento.' + sourceFormat
 			});
 
-			// Send the document to the iframe
-			externalConverterIframe.contentWindow.postMessage({
-				type: 'convert',
-				buffer: docBuffer,
-				format: targetFormat,
-				requestId: Date.now().toString()
-			}, externalConverterOrigin);
+			const converterUrl = config.externalConverterUrl + '#' + hashParams.toString();
 
-			// Wait for result
-			const result = await resultPromise;
+			// Step 5: Open converter in new tab
+			// Using <a> tag click instead of window.open for better compatibility
+			updateModal(
+				strings.loadingWasm || 'Opening converter...',
+				'A new tab will open with the converter. Please wait for the conversion to complete.'
+			);
 
-			// Step 5: Handle result
-			if (result.blob) {
-				handleExternalConversionResult(result.blob, action, targetFormat);
-			} else {
-				throw new Error('No result blob received');
-			}
+			const a = document.createElement('a');
+			a.href = converterUrl;
+			a.target = '_blank';
+			a.rel = 'noopener';
+			document.body.appendChild(a);
+			a.click();
+			document.body.removeChild(a);
+
+			// Hide modal after opening - the conversion happens in the new tab
+			setTimeout(function() {
+				hideModal();
+			}, 1500);
 
 		} catch (error) {
 			console.error('Documentate external conversion error:', error);
@@ -811,21 +630,16 @@
 	 * Initialize.
 	 */
 	function init() {
-		// Initialize postMessage listener for iframe mode
+		// Initialize postMessage listener for iframe mode (local converter)
 		initIframeMessageListener();
-
-		// Initialize external converter listener (for Playground)
-		initExternalConverterListener();
 
 		// Bind click handlers to action buttons
 		$(document).on('click', '[data-documentate-action]', handleActionClick);
 
-		// Log mode for debugging and pre-load converter if needed
+		// Log mode for debugging
 		if (shouldUseExternalConverter()) {
 			console.log('Documentate: External converter will be used for WASM conversions (Playground mode)');
-			// Pre-load the external converter iframe so it's ready when user needs it
-			// This significantly speeds up the first conversion
-			initExternalConverter();
+			console.log('Documentate: Documents will open in new tab at', config.externalConverterUrl);
 		} else if (shouldUseIframe()) {
 			console.log('Documentate: Iframe mode will be used for WASM conversions');
 		} else {
