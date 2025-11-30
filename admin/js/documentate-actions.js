@@ -350,18 +350,21 @@
 	}
 
 	/**
+	 * Reference to the converter window opened for external conversion.
+	 */
+	let externalConverterWindow = null;
+
+	/**
 	 * Handle conversion using external converter service.
-	 * Opens the converter in a new tab with the file as query parameters.
-	 * This works in WordPress Playground because:
-	 * - The new tab has its own context with Cross-Origin Isolation
-	 * - No iframe/popup restrictions apply
-	 * - The converter's Service Worker can enable SharedArrayBuffer
+	 * Opens the converter in a new tab and sends the file via postMessage.
+	 * This approach avoids URL length limits for large files.
 	 *
-	 * External converter API:
-	 * - base64: Base64-encoded document content
-	 * - name: Filename (required with base64)
-	 * - format: Output format (pdf, docx, etc.)
-	 * - download: If "true", auto-download instead of preview
+	 * Flow:
+	 * 1. Generate source document via AJAX
+	 * 2. Open converter with ?receive=opener (tells it to wait for data)
+	 * 3. Wait for converter to signal ready via postMessage
+	 * 4. Send document via postMessage
+	 * 5. Converter processes and shows result
 	 *
 	 * @param {jQuery} $btn         The button element.
 	 * @param {string} action       Action type (preview, download).
@@ -406,59 +409,87 @@
 			}
 			const docBuffer = await docResponse.arrayBuffer();
 
-			// Step 3: Convert ArrayBuffer to base64
+			// Step 3: Open converter in new tab with receive=opener mode
 			updateModal(
-				strings.loadingWasm || 'Preparing document...',
-				'Encoding for converter...'
+				strings.loadingWasm || 'Opening converter...',
+				'A new tab will open. Please wait for conversion to complete.'
 			);
 
-			const bytes = new Uint8Array(docBuffer);
-			let binary = '';
-			for (let i = 0; i < bytes.length; i++) {
-				binary += String.fromCharCode(bytes[i]);
-			}
-			const base64Data = btoa(binary);
-
-			// Check file size - warn if too large (> 2MB encoded is ~1.5MB original)
-			if (base64Data.length > 2 * 1024 * 1024) {
-				console.warn('Documentate: Document is large (' + Math.round(base64Data.length / 1024) + 'KB encoded). URL might be too long for some browsers.');
-			}
-
-			// Step 4: Build converter URL with query parameters
-			// API: ?base64=DATA&name=filename.odt&format=pdf&download=true/false
+			// Build URL with opener mode parameters
 			const queryParams = new URLSearchParams({
-				base64: base64Data,
+				receive: 'opener',
+				format: targetFormat,
 				name: 'documento.' + sourceFormat,
-				format: targetFormat
+				download: action !== 'preview' ? 'true' : 'false'
 			});
-
-			// For downloads (not preview), add download=true parameter
-			if (action !== 'preview') {
-				queryParams.set('download', 'true');
-			}
-			// For preview: don't set download param, converter will show inline
 
 			const converterUrl = config.externalConverterUrl + '?' + queryParams.toString();
 
-			// Step 5: Open converter in new tab
-			// Using <a> tag click instead of window.open for better compatibility
+			// Open the converter window
+			// Note: We don't use noopener because we need window.opener for postMessage
+			externalConverterWindow = window.open(converterUrl, 'documentate_converter');
+
+			// Step 4: Wait for converter to signal ready, then send document
 			updateModal(
-				strings.loadingWasm || 'Opening converter...',
-				'A new tab will open with the converter. Please wait for the conversion to complete.'
+				strings.loadingWasm || 'Waiting for converter...',
+				'The converter is loading LibreOffice WASM (~50MB first time).'
 			);
 
-			const a = document.createElement('a');
-			a.href = converterUrl;
-			a.target = '_blank';
-			a.rel = 'noopener';
-			document.body.appendChild(a);
-			a.click();
-			document.body.removeChild(a);
+			// Set up listener for converter ready signal
+			const sendDocumentWhenReady = new Promise((resolve, reject) => {
+				const timeout = setTimeout(() => {
+					window.removeEventListener('message', readyHandler);
+					reject(new Error('Converter did not respond. Please check if the converter tab opened.'));
+				}, 180000); // 3 minutes timeout
 
-			// Hide modal after opening - the conversion happens in the new tab
+				const readyHandler = (event) => {
+					// Check if it's from our converter
+					if (!event.data || !event.data.type) return;
+
+					if (event.data.type === 'converterReady') {
+						clearTimeout(timeout);
+						window.removeEventListener('message', readyHandler);
+
+						console.log('Documentate: Converter ready, sending document...');
+						updateModal(
+							strings.convertingBrowser || 'Converting...',
+							'Processing with LibreOffice WASM...'
+						);
+
+						// Send the document
+						if (externalConverterWindow && !externalConverterWindow.closed) {
+							externalConverterWindow.postMessage({
+								type: 'convertDocument',
+								buffer: docBuffer,
+								name: 'documento.' + sourceFormat,
+								format: targetFormat,
+								download: action !== 'preview'
+							}, '*');
+						}
+						resolve();
+					} else if (event.data.type === 'conversionComplete') {
+						clearTimeout(timeout);
+						window.removeEventListener('message', readyHandler);
+
+						if (event.data.success) {
+							console.log('Documentate: Conversion completed successfully');
+						} else {
+							console.error('Documentate: Conversion failed:', event.data.error);
+						}
+						hideModal();
+						resolve();
+					}
+				};
+
+				window.addEventListener('message', readyHandler);
+			});
+
+			await sendDocumentWhenReady;
+
+			// Hide modal - conversion happens in the new tab
 			setTimeout(function() {
 				hideModal();
-			}, 1500);
+			}, 2000);
 
 		} catch (error) {
 			console.error('Documentate external conversion error:', error);
