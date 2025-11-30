@@ -3,20 +3,11 @@ name: CI
 
 on:
   pull_request:
-    paths-ignore:
-      - '**.md'
   push:
     tags:
       - '*'
     branches:
-      - '*'
-    paths-ignore:
-      - '**.md'
-
-# Cancel previous runs on the same branch
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+      - '*' 
 
 permissions:
   contents: read
@@ -25,14 +16,14 @@ permissions:
   checks: write
 
 jobs:
-  # JOB 1: BLUEPRINTS & SETUP (Fastest)
-  # Generates the Playground URL early so you can test while other jobs run
-  blueprint:
+  lint_and_test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # Checkout the code
+      - uses: actions/checkout@v6
 
-      - name: Set branch name
+      # Determine the branch name
+      - name: Set branch name for blueprint URL
         shell: bash
         run: |
           if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
@@ -41,28 +32,60 @@ jobs:
             echo "BRANCH_NAME=${GITHUB_REF_NAME}" >> $GITHUB_ENV
           fi
 
-      - name: Patch and Encode blueprint
-        id: blueprint
+      # Replace main.zip with <BRANCH_NAME>.zip in blueprint.json
+      - name: Patch blueprint.json with branch ZIP
         run: |
           sed -i "s|refs/heads/main.zip|refs/heads/${BRANCH_NAME}.zip|g" blueprint.json
+
+      # Convert blueprint.json to Base64, because github not processes well json in urls
+      - name: Encode blueprint for Playground
+        id: blueprint
+        run: |
+          # Base64-encode the blueprint (no line wraps)
           BASE64_BLUEPRINT=$(base64 -w 0 blueprint.json)
           echo "BASE64_BLUEPRINT=$BASE64_BLUEPRINT" >> $GITHUB_ENV
 
-      - name: Create Deployment & Check
-        uses: actions/github-script@v7
+      # Show final Playground URL in the Summary
+      - name: Add Playground URL to summary
+        run: |
+          echo "[Test in WP Playground](https://playground.wordpress.net/#${BASE64_BLUEPRINT})" >> $GITHUB_STEP_SUMMARY
+
+      # Create a GitHub Check Run with the Playground URL
+      - name: Create a check with a test link
+        uses: actions/github-script@v8
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const encodedBlueprint = process.env.BASE64_BLUEPRINT;
             const playgroundUrl = `https://playground.wordpress.net/#${encodedBlueprint}`;
-            
-            // Create Deployment
+            github.rest.checks.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              name: "Test on WP playground",
+              head_sha: context.payload.pull_request ? context.payload.pull_request.head.sha : context.sha,
+              status: "completed",
+              conclusion: "neutral",
+              output: {
+                title: "Test in WP playground",
+                summary: `[Test in WP Playground](${playgroundUrl})`
+              }
+            });
+
+      # Create a deployment with the Playground URL
+      - name: Create a deployment
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const encodedBlueprint = process.env.BASE64_BLUEPRINT;
+            const playgroundUrl = `https://playground.wordpress.net/#${encodedBlueprint}`;
+
             const deployment = await github.rest.repos.createDeployment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               ref: context.payload.pull_request ? context.payload.pull_request.head.ref : context.ref,
-              environment: "playground",
               required_contexts: [],
+              environment: "playground",
               transient_environment: true,
               auto_merge: false,
               description: "WordPress Playground Deployment"
@@ -75,184 +98,64 @@ jobs:
                 deployment_id: deployment.data.id,
                 state: "success",
                 environment_url: playgroundUrl,
-                description: "Ready"
+                description: "Playground environment ready"
               });
             }
 
-            // Add to Summary
-            core.summary.addLink('Test in WP Playground', playgroundUrl);
-            await core.summary.write();
 
-  # JOB 2: LINT & STATIC ANALYSIS (No Docker required - Fast)
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
 
-      - name: Setup PHP
+      - name: Pre-pull Docker images
+        run: |
+          docker pull mariadb:lts
+          docker pull wordpress
+          docker pull wordpress:cli
+
+      - name: PHP setup
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.3'
-          extensions: json, xml
-          tools: composer:v2, cs2pr, phpcs
-          coverage: none
+          php-version: '8.3'  # Adjust the version according to your needs
+          extensions: mbstring, intl, curl, dom, json, pdo, mysql, xml, zip
 
-      - name: Get Composer Cache
-        id: composer-cache
-        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
-
-      - uses: actions/cache@v4
-        with:
-          path: ${{ steps.composer-cache.outputs.dir }}
-          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
-          restore-keys: ${{ runner.os }}-composer-
-
-      - name: Install Dependencies
+      - name: Install dependencies
         run: composer install --no-interaction --prefer-dist
 
       - name: Install gettext
         run: sudo apt-get install -y gettext
 
-      - name: Check Untranslated Strings
+      - name: Check untranslated strings
         run: make check-untranslated
 
-      # Run PHPCS directly (skipping Docker overhead)
-      - name: Run PHPCS
-        run: ./vendor/bin/phpcs --standard=.phpcs.xml.dist --report=checkstyle -q . | cs2pr
+      # Install wp-env globally
+      - name: Setup wp-env
+        run: npm -g --no-fund i @wordpress/env
 
-  # JOB 3: UNIT TESTS (Requires Docker)
-  test-unit:
-
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.3'
-          extensions: mbstring, intl, curl, dom, json, pdo, mysql, xml, zip
-          tools: composer:v2
-          coverage: none # Coverage is handled by xdebug in container
-
-      - name: Get Composer Cache
-        id: composer-cache
-        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
-       
-      - uses: actions/cache@v4
-        with:
-          path: ${{ steps.composer-cache.outputs.dir }}
-          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
-
-      # Cache wp-env (WordPress core + Docker config)
-      - name: Cache wp-env files
-        uses: actions/cache@v4
-        with:
-          path: ~/wp-env
-          key: ${{ runner.os }}-wp-env-v1-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-wp-env-v1-
-
-      - name: Install Dependencies
-        run: |
-          composer install --no-interaction --prefer-dist
-          npm ci
-          npm -g --no-fund i @wordpress/env
-
-      - name: Start Environment (Xdebug)
-        run: npx wp-env start --xdebug=coverage
-
-      - name: Check Plugin (WP-CLI)
-        run: make check-plugin
-
-      - name: Run Unit Tests (Coverage)
-        run: make test-coverage
-
-      - name: Upload Coverage
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: coverage-report
-          path: artifacts/coverage/html/
-          retention-days: 7
-
-  # JOB 4: E2E TESTS (Requires Docker + Playwright)
-  test-e2e:
-    strategy:
-      fail-fast: false
-      matrix:
-        shardIndex: [1, 2, 3, 4]
-        shardTotal: [4]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.3'
-          tools: composer:v2
-          coverage: none
-
-      - name: Get Composer Cache
-        id: composer-cache
-        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
-       
-      - uses: actions/cache@v4
-        with:
-          path: ${{ steps.composer-cache.outputs.dir }}
-          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
-
-      - name: Cache wp-env files
-        uses: actions/cache@v4
-        with:
-          path: ~/wp-env
-          key: ${{ runner.os }}-wp-env-v1-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-wp-env-v1-
-
-      - name: Cache Playwright binaries
-        uses: actions/cache@v4
-        id: playwright-cache
-        with:
-          path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ hashFiles('**/package-lock.json') }}
-
-      - name: Install Dependencies
-        run: |
-          composer install --no-interaction --prefer-dist
-          npm ci
-          npm -g --no-fund i @wordpress/env
-
-      - name: Install Playwright Browsers
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: npx playwright install --with-deps chromium
-
-      - name: Start Environment
+      # Start wp-env environment
+      - name: Start wp-env
         run: make up
 
-      - name: Run E2E Tests (Shard ${{ matrix.shardIndex }}/${{ matrix.shardTotal }})
-        run: make test-e2e ARGS="--shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }}"
+      - name: Run code linting
+        run: make lint
+
+      - name: Run plugin check
+        run: make check-plugin
+
+      - name: Run unit tests
+        run: make test
+
+      # E2E Tests with Playwright
+      - name: Install npm dependencies and Playwright
+        run: npm install && npx playwright install --with-deps chromium
+
+      - name: Run E2E tests
+        run: make test-e2e
         env:
           CI: true
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
 
-      - name: Upload Playwright Report
+      - name: Upload E2E test artifacts
         uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: playwright-report-${{ matrix.shardIndex }}
+          name: playwright-report
           path: artifacts/
           retention-days: 7
