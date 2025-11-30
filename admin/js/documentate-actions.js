@@ -145,7 +145,13 @@
 					</div>
 				</div>
 				<div class="documentate-pdf-viewer__content">
-					<iframe src="${dataUrl}" class="documentate-pdf-viewer__iframe"></iframe>
+					<object data="${dataUrl}" type="application/pdf" class="documentate-pdf-viewer__object">
+						<p style="padding: 20px; text-align: center;">
+							${escapeHtml(strings.pdfNotSupported || 'Tu navegador no puede mostrar PDFs embebidos.')}
+							<br><br>
+							<a href="${blobUrl}" download="documento.pdf" class="button button-primary">${escapeHtml(strings.download || 'Descargar')}</a>
+						</p>
+					</object>
 				</div>
 			</div>
 		`;
