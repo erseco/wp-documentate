@@ -119,11 +119,21 @@
 	 * Show PDF in an embedded viewer modal.
 	 * Used in Playground where window.open() doesn't work with blob URLs.
 	 *
-	 * @param {string} blobUrl The blob URL of the PDF.
+	 * @param {Blob} pdfBlob The PDF blob to display.
 	 */
-	function showPdfViewer(blobUrl) {
+	async function showPdfViewer(pdfBlob) {
 		// Remove existing viewer if any
 		$('#documentate-pdf-viewer').remove();
+
+		// Convert blob to base64 data URL (more compatible than blob URLs in iframes)
+		const arrayBuffer = await pdfBlob.arrayBuffer();
+		const base64 = btoa(
+			new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
+		);
+		const dataUrl = 'data:application/pdf;base64,' + base64;
+
+		// Create blob URL for download button
+		const blobUrl = URL.createObjectURL(pdfBlob);
 
 		const html = `
 			<div class="documentate-pdf-viewer" id="documentate-pdf-viewer">
@@ -135,7 +145,7 @@
 					</div>
 				</div>
 				<div class="documentate-pdf-viewer__content">
-					<iframe src="${blobUrl}" class="documentate-pdf-viewer__iframe"></iframe>
+					<iframe src="${dataUrl}" class="documentate-pdf-viewer__iframe"></iframe>
 				</div>
 			</div>
 		`;
@@ -409,15 +419,15 @@
 				odt: 'application/vnd.oasis.opendocument.text'
 			};
 			const finalBlob = new Blob([resultBlob], { type: mimeTypes[targetFormat] || 'application/octet-stream' });
-			const blobUrl = URL.createObjectURL(finalBlob);
 
 			hideModal();
 
 			if (action === 'preview' && targetFormat === 'pdf') {
 				// In Playground, show PDF in an embedded viewer (new tabs don't work well with blob URLs)
-				showPdfViewer(blobUrl);
+				showPdfViewer(finalBlob);
 			} else {
 				// Trigger download
+				const blobUrl = URL.createObjectURL(finalBlob);
 				const a = document.createElement('a');
 				a.href = blobUrl;
 				a.download = 'documento.' + targetFormat;
