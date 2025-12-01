@@ -68,6 +68,7 @@ body.documentate-document-locked #poststuff {
 
 /**
  * Locked overlay for sections container.
+ * Blocks all interaction with elements underneath.
  */
 .locked-overlay {
 	position: absolute;
@@ -75,19 +76,33 @@ body.documentate-document-locked #poststuff {
 	left: 0;
 	right: 0;
 	bottom: 0;
-	background: rgba(255, 255, 255, 0.6);
+	background: rgba(245, 245, 245, 0.85);
+	backdrop-filter: blur(0.5px);
+	-webkit-backdrop-filter: blur(0.5px);
 	display: flex;
-	align-items: center;
+	align-items: flex-start;
 	justify-content: center;
-	z-index: 100;
-	pointer-events: none;
+	padding-top: 80px;
+	z-index: 1000;
+	pointer-events: all;
+	cursor: not-allowed;
 }
 
 .locked-overlay .dashicons {
-	font-size: 48px;
-	width: 48px;
-	height: 48px;
-	color: rgba(0, 0, 0, 0.2);
+	font-size: 64px;
+	width: 64px;
+	height: 64px;
+	color: rgba(0, 0, 0, 0.3);
+}
+
+.locked-overlay .locked-message {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 10px;
+	color: #666;
+	font-size: 14px;
+	text-align: center;
 }
 
 /* ==========================================================================
@@ -422,7 +437,7 @@ label[for="visibility-radio-private"] {
 /**
  * Sections container relative positioning for overlay.
  */
-#documentate_document_sections .inside,
+#documentate_sections .inside,
 .documentate-sections-container {
 	position: relative;
 }

@@ -730,7 +730,8 @@ class Documentate_Documents {
 			if ( 'single' === $type ) {
 				$this->render_single_input_control( $meta_key, $label, $value, $field_type, $data_type, $raw_field, $describedby, $validation );
 			} elseif ( 'rich' === $type ) {
-				$this->render_rich_editor_control( $meta_key, $value );
+				$is_locked = ( 'publish' === $post->post_status );
+				$this->render_rich_editor_control( $meta_key, $value, $is_locked );
 			} else {
 				$this->render_textarea_control( $meta_key, $value, $raw_field, $describedby, $validation );
 			}
@@ -835,10 +836,11 @@ class Documentate_Documents {
 	/**
 	 * Render a rich text editor control.
 	 *
-	 * @param string $meta_key The meta key for the field.
-	 * @param string $value    The current field value.
+	 * @param string $meta_key  The meta key for the field.
+	 * @param string $value     The current field value.
+	 * @param bool   $is_locked Whether the editor should be readonly (default false).
 	 */
-	private function render_rich_editor_control( $meta_key, $value ) {
+	private function render_rich_editor_control( $meta_key, $value, $is_locked = false ) {
 		$is_collaborative = $this->is_collaborative_editing_enabled();
 
 		if ( $is_collaborative ) {
@@ -846,6 +848,15 @@ class Documentate_Documents {
 			echo '<textarea id="' . esc_attr( $meta_key ) . '" name="' . esc_attr( $meta_key ) . '" class="documentate-collab-textarea" rows="8">' . esc_textarea( $value ) . '</textarea>';
 			echo '</div>';
 		} else {
+			$tinymce_config = array(
+				'toolbar1'      => 'formatselect,bold,italic,underline,link,bullist,numlist,alignleft,aligncenter,alignright,alignjustify,table,undo,redo,searchreplace,removeformat',
+				'content_style' => 'table{border-collapse:collapse}th,td{border:1px solid #000;padding:2px}',
+			);
+
+			if ( $is_locked ) {
+				$tinymce_config['readonly'] = 1;
+			}
+
 			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- wp_editor handles output escaping.
 			wp_editor(
 				$value,
@@ -856,10 +867,7 @@ class Documentate_Documents {
 					'media_buttons' => false,
 					'teeny'         => false,
 					'wpautop'       => false,
-					'tinymce'       => array(
-						'toolbar1'      => 'formatselect,bold,italic,underline,link,bullist,numlist,alignleft,aligncenter,alignright,alignjustify,table,undo,redo,searchreplace,removeformat',
-						'content_style' => 'table{border-collapse:collapse}th,td{border:1px solid #000;padding:2px}',
-					),
+					'tinymce'       => $tinymce_config,
 					'quicktags'     => true,
 					'editor_height' => 220,
 				)

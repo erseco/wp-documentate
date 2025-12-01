@@ -68,6 +68,9 @@ function initializeRichEditors(container) {
 	if (!window.wp || !wp.editor || typeof wp.editor.initialize !== 'function') {
 		return;
 	}
+	// Check if document is locked via body class or workflow config.
+	var isLocked = document.body.classList.contains('documentate-document-locked') ||
+		(window.documentateWorkflow && window.documentateWorkflow.isPublished);
 	var editors = container.querySelectorAll('textarea.documentate-array-rich[data-editor-initialized="false"]');
 	editors.forEach(function(textarea) {
 		if (!textarea.id) {
@@ -83,7 +86,13 @@ function initializeRichEditors(container) {
 			table_tab_navigation: true,
 			table_advtab: true,
 			table_cell_advtab: true,
-			table_row_advtab: true
+			table_row_advtab: true,
+			readonly: isLocked ? 1 : 0,
+			init_instance_callback: function(editor) {
+				if (isLocked && editor.mode && typeof editor.mode.set === 'function') {
+					editor.mode.set('readonly');
+				}
+			}
 		};
 		if (window.documentateTable && documentateTable.pluginUrl) {
 			tinymceConfig.external_plugins = {
@@ -97,6 +106,18 @@ function initializeRichEditors(container) {
 			wpautop: false
 		});
 		textarea.setAttribute('data-editor-initialized', 'true');
+
+		// Disable quicktags buttons when locked.
+		if (isLocked) {
+			var qtToolbar = document.getElementById('qt_' + textarea.id + '_toolbar');
+			if (qtToolbar) {
+				var buttons = qtToolbar.querySelectorAll('.ed_button');
+				buttons.forEach(function(btn) {
+					btn.disabled = true;
+					btn.classList.add('documentate-locked');
+				});
+			}
+		}
 	});
 }
 
