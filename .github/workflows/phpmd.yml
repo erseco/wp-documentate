@@ -51,6 +51,26 @@ jobs:
         continue-on-error: true
         run: phpmd . sarif phpmd.xml --baseline-file phpmd.baseline.xml --reportfile phpmd-results.sarif
 
+      - name: Display PHPMD Results Summary
+        if: always() && steps.phpmd.outcome == 'failure'
+        run: |
+          echo "::group::PHPMD Issues Found"
+          if [ -f phpmd-results.sarif ]; then
+            ISSUES=$(jq '.runs[0].results | length' phpmd-results.sarif 2>/dev/null || echo "0")
+            echo "Total new issues: $ISSUES"
+            echo ""
+            jq -r '.runs[0].results[] | "❌ \(.locations[0].physicalLocation.artifactLocation.uri):\(.locations[0].physicalLocation.region.startLine)\n   Rule: \(.ruleId)\n   \(.message.text)\n"' phpmd-results.sarif 2>/dev/null || echo "Could not parse SARIF"
+          fi
+          echo "::endgroup::"
+
+      - name: Run PHPMD Text Report
+        if: always() && steps.phpmd.outcome == 'failure'
+        continue-on-error: true
+        run: |
+          echo "::group::PHPMD Text Report"
+          phpmd . text phpmd.xml --baseline-file phpmd.baseline.xml || true
+          echo "::endgroup::"
+
       - name: Upload analysis results to GitHub
         if: always() && steps.phpmd.outcome != 'skipped'
         uses: github/codeql-action/upload-sarif@v4
@@ -61,5 +81,12 @@ jobs:
       - name: Fail if PHPMD found issues
         if: steps.phpmd.outcome == 'failure'
         run: |
-          echo "PHPMD found issues. Check the Security tab for details."
+          echo "=================================================="
+          echo "PHPMD found code quality issues."
+          echo ""
+          echo "View details:"
+          echo "  - Above: Summary and text report"
+          echo "  - Security tab: Full SARIF report (may take a few minutes)"
+          echo "  - PR: Inline annotations on changed files"
+          echo "=================================================="
           exit 1
