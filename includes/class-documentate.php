@@ -208,6 +208,10 @@ class Documentate {
 		$this->loader->add_filter( 'show_post_locked_dialog', $plugin_admin, 'disable_post_lock_dialog', 10, 3 );
 		$this->loader->add_filter( 'wp_check_post_lock', $plugin_admin, 'disable_post_lock', 10, 2 );
 		$this->loader->add_filter( 'wp_check_post_lock_window', $plugin_admin, 'disable_post_lock_window', 10, 1 );
+
+		// TinyMCE table plugin for document editors.
+		$this->loader->add_filter( 'mce_external_plugins', $plugin_admin, 'add_tinymce_table_plugin', 10, 1 );
+		$this->loader->add_filter( 'tiny_mce_before_init', $plugin_admin, 'configure_tinymce_table_options', 10, 1 );
 	}
 
 	/**

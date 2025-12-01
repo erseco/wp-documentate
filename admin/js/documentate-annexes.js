@@ -73,11 +73,25 @@ function initializeRichEditors(container) {
 		if (!textarea.id) {
 			return;
 		}
+		var tinymceConfig = {
+			toolbar1: 'formatselect,bold,italic,underline,link,bullist,numlist,alignleft,aligncenter,alignright,alignjustify,table,undo,redo,removeformat',
+			wpautop: false,
+			table_toolbar: false,
+			table_responsive_width: true,
+			table_resize_bars: true,
+			table_grid: true,
+			table_tab_navigation: true,
+			table_advtab: true,
+			table_cell_advtab: true,
+			table_row_advtab: true
+		};
+		if (window.documentateTable && documentateTable.pluginUrl) {
+			tinymceConfig.external_plugins = {
+				table: documentateTable.pluginUrl
+			};
+		}
 		wp.editor.initialize(textarea.id, {
-			tinymce: {
-				toolbar1: 'formatselect,bold,italic,underline,link,bullist,numlist,alignleft,aligncenter,alignright,alignjustify,undo,redo,removeformat',
-				wpautop: false
-			},
+			tinymce: tinymceConfig,
 			quicktags: true,
 			mediaButtons: false,
 			wpautop: false

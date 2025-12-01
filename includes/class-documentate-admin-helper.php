@@ -174,6 +174,14 @@ class Documentate_Admin_Helper {
 
 		// Annexes repeater UI.
 		wp_enqueue_script( 'documentate-annexes', plugins_url( 'admin/js/documentate-annexes.js', DOCUMENTATE_PLUGIN_FILE ), array( 'jquery', 'wp-editor' ), DOCUMENTATE_VERSION, true );
+		$suffix = defined( 'SCRIPT_DEBUG' ) && SCRIPT_DEBUG ? '' : '.min';
+		wp_localize_script(
+			'documentate-annexes',
+			'documentateTable',
+			array(
+				'pluginUrl' => plugins_url( 'admin/mce/table/plugin' . $suffix . '.js', DOCUMENTATE_PLUGIN_FILE ),
+			)
+		);
 	}
 
 	/**

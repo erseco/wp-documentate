@@ -420,7 +420,7 @@ class Documentate_Documents {
 			'capability_type'    => 'post',
 			'map_meta_cap'       => true,
 			'hierarchical'       => false,
-			'supports'           => array( 'title', 'revisions', 'comments' ),
+			'supports'           => array( 'title', 'revisions' ),
 			'taxonomies'        => array( 'category' ),
 			'has_archive'        => false,
 			'rewrite'            => false,
@@ -840,7 +840,7 @@ class Documentate_Documents {
 					'teeny'         => false,
 					'wpautop'       => false,
 					'tinymce'       => array(
-						'toolbar1'      => 'formatselect,bold,italic,underline,link,bullist,numlist,alignleft,aligncenter,alignright,alignjustify,undo,redo,removeformat',
+						'toolbar1'      => 'formatselect,bold,italic,underline,link,bullist,numlist,alignleft,aligncenter,alignright,alignjustify,table,undo,redo,removeformat',
 						'content_style' => 'table{border-collapse:collapse}th,td{border:1px solid #000;padding:2px}',
 					),
 					'quicktags'     => true,
@@ -2255,7 +2255,7 @@ class Documentate_Documents {
 					'teeny'         => false,
 					'wpautop'       => false,
 					'tinymce'       => array(
-						'toolbar1'      => 'formatselect,bold,italic,underline,link,bullist,numlist,alignleft,aligncenter,alignright,alignjustify,undo,redo,removeformat',
+						'toolbar1'      => 'formatselect,bold,italic,underline,link,bullist,numlist,alignleft,aligncenter,alignright,alignjustify,table,undo,redo,removeformat',
 						'content_style' => 'table{border-collapse:collapse}th,td{border:1px solid #000;padding:2px}',
 					),
 					'quicktags'     => true,
