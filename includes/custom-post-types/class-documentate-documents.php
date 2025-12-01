@@ -838,9 +838,10 @@ class Documentate_Documents {
 					'textarea_rows' => 8,
 					'media_buttons' => false,
 					'teeny'         => false,
+					'wpautop'       => false,
 					'tinymce'       => array(
 						'toolbar1'      => 'formatselect,bold,italic,underline,link,bullist,numlist,alignleft,aligncenter,alignright,alignjustify,undo,redo,removeformat',
-						'content_style' => 'table,th,td{border:1px solid #000;border-collapse:collapse}table{border-collapse:collapse}',
+						'content_style' => 'table{border-collapse:collapse}th,td{border:1px solid #000;padding:2px}',
 					),
 					'quicktags'     => true,
 					'editor_height' => 220,
@@ -1443,7 +1444,10 @@ class Documentate_Documents {
 	}
 
 	/**
-	 * Sanitize rich text content by stripping disallowed blocks completely.
+	 * Sanitize rich text content by stripping dangerous elements only.
+	 *
+	 * Only removes security-critical elements (script, style, iframe).
+	 * Full sanitization and cleanup is deferred to document generation time.
 	 *
 	 * @param string $value Raw submitted value.
 	 * @return string
@@ -1455,9 +1459,10 @@ class Documentate_Documents {
 			return '';
 		}
 
-		$value = $this->normalize_literal_line_endings( $value );
+		// Normalize line endings.
 		$value = str_replace( array( "\r\n", "\r" ), "\n", $value );
 
+		// Only strip dangerous elements (security filtering).
 		$patterns = array(
 			'#<script\b[^>]*>.*?</script>#is',
 			'#<style\b[^>]*>.*?</style>#is',
@@ -1465,15 +1470,8 @@ class Documentate_Documents {
 		);
 
 		$clean = preg_replace( $patterns, '', $value );
-		if ( null === $clean ) {
-			$clean = $value;
-		}
 
-		$sanitized = wp_kses_post( $clean );
-
-		$sanitized = $this->normalize_literal_line_endings( $sanitized );
-		$sanitized = str_replace( array( "\r\n", "\r" ), "\n", $sanitized );
-		return $this->remove_linebreak_artifacts( $sanitized );
+		return null === $clean ? $value : $clean;
 	}
 
 	/**
@@ -2255,9 +2253,10 @@ class Documentate_Documents {
 					'textarea_rows' => 6,
 					'media_buttons' => false,
 					'teeny'         => false,
+					'wpautop'       => false,
 					'tinymce'       => array(
 						'toolbar1'      => 'formatselect,bold,italic,underline,link,bullist,numlist,alignleft,aligncenter,alignright,alignjustify,undo,redo,removeformat',
-						'content_style' => 'table,th,td{border:1px solid #000;border-collapse:collapse}table{border-collapse:collapse}',
+						'content_style' => 'table{border-collapse:collapse}th,td{border:1px solid #000;padding:2px}',
 					),
 					'quicktags'     => true,
 					'editor_height' => 200,

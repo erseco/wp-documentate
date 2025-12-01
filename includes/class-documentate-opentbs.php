@@ -54,6 +54,18 @@ class Documentate_OpenTBS {
 	private const ODF_XLINK_NS = 'http://www.w3.org/1999/xlink';
 
 	/**
+	 * Table border style for generated documents.
+	 * Format: "width style color" (e.g., "0.5pt solid #000000").
+	 */
+	public const TABLE_BORDER = '0.5pt solid #000000';
+
+	/**
+	 * Table cell padding for generated documents.
+	 * Uses ODF fo:padding format (e.g., "0.049cm" is similar to Word default).
+	 */
+	public const TABLE_CELL_PADDING = '0.049cm';
+
+	/**
 	 * Create a DOMDocument configured for XML parsing.
 	 *
 	 * @param string $xml XML content to load.
@@ -970,11 +982,28 @@ class Documentate_OpenTBS {
 				return self::collect_html_children_as_odt( $doc, $node, $formatting, $style_require, $list_state );
 			case 'p':
 			case 'div':
-				$children = self::collect_html_children_as_odt( $doc, $node, $formatting, $style_require, $list_state );
+				$alignment = self::extract_text_alignment( $node );
+				$children  = self::collect_html_children_as_odt( $doc, $node, $formatting, $style_require, $list_state );
 				if ( empty( $children ) ) {
 					return array();
 				}
-				$result = $children;
+
+				// If alignment is specified, create a real paragraph with alignment style.
+				if ( null !== $alignment && 'left' !== $alignment ) {
+					$paragraph  = $doc->createElementNS( self::ODF_TEXT_NS, 'text:p' );
+					$style_name = 'DocumentateAlign' . ucfirst( $alignment );
+					$paragraph->setAttributeNS( self::ODF_TEXT_NS, 'text:style-name', $style_name );
+					$style_require[ 'align_' . $alignment ] = true;
+
+					self::trim_odt_inline_nodes( $children );
+					foreach ( $children as $child_node ) {
+						$paragraph->appendChild( $child_node );
+					}
+					return array( $paragraph );
+				}
+
+				// No alignment - use line-break approach for backward compatibility.
+				$result   = $children;
 				$result[] = $doc->createElementNS( self::ODF_TEXT_NS, 'text:line-break' );
 				return $result;
 			case 'table':
@@ -1155,6 +1184,17 @@ class Documentate_OpenTBS {
 			$cell_formatting['bold'] = true;
 		}
 
+		// Extract alignment from cell or first paragraph child.
+		$alignment = self::extract_text_alignment( $cell );
+		if ( null === $alignment ) {
+			foreach ( $cell->childNodes as $child ) {
+				if ( $child instanceof DOMElement && 'p' === strtolower( $child->nodeName ) ) {
+					$alignment = self::extract_text_alignment( $child );
+					break;
+				}
+			}
+		}
+
 		$cell_element = $doc->createElementNS( self::ODF_TABLE_NS, 'table:table-cell' );
 		$cell_element->setAttributeNS( self::ODF_TABLE_NS, 'table:style-name', 'DocumentateRichTableCell' );
 		$style_require['table_cell'] = true;
@@ -1164,6 +1204,13 @@ class Documentate_OpenTBS {
 			'unordered' => 0,
 			'ordered'   => array(),
 		);
+
+		// Apply alignment style to paragraph.
+		if ( null !== $alignment && 'left' !== $alignment ) {
+			$style_name = 'DocumentateAlign' . ucfirst( $alignment );
+			$paragraph->setAttributeNS( self::ODF_TEXT_NS, 'text:style-name', $style_name );
+			$style_require[ 'align_' . $alignment ] = true;
+		}
 
 		$cell_nodes = self::collect_html_children_as_odt( $doc, $cell, $cell_formatting, $style_require, $cell_list_state );
 		if ( ! empty( $cell_nodes ) ) {
@@ -1460,18 +1507,56 @@ class Documentate_OpenTBS {
 					array(
 						'ns' => self::ODF_FO_NS,
 						'name' => 'fo:border',
-						'value' => '0.5pt solid #000000',
+						'value' => self::TABLE_BORDER,
 					),
 				),
 			),
-			'table_cell' => array(
+			'table_cell'    => array(
 				'name'   => 'DocumentateRichTableCell',
 				'family' => 'table-cell',
 				'props'  => array(
 					array(
-						'ns' => self::ODF_FO_NS,
-						'name' => 'fo:border',
-						'value' => '0.5pt solid #000000',
+						'ns'    => self::ODF_FO_NS,
+						'name'  => 'fo:border',
+						'value' => self::TABLE_BORDER,
+					),
+					array(
+						'ns'    => self::ODF_FO_NS,
+						'name'  => 'fo:padding',
+						'value' => self::TABLE_CELL_PADDING,
+					),
+				),
+			),
+			'align_center'  => array(
+				'name'   => 'DocumentateAlignCenter',
+				'family' => 'paragraph',
+				'props'  => array(
+					array(
+						'ns'    => self::ODF_FO_NS,
+						'name'  => 'fo:text-align',
+						'value' => 'center',
+					),
+				),
+			),
+			'align_right'   => array(
+				'name'   => 'DocumentateAlignRight',
+				'family' => 'paragraph',
+				'props'  => array(
+					array(
+						'ns'    => self::ODF_FO_NS,
+						'name'  => 'fo:text-align',
+						'value' => 'end',
+					),
+				),
+			),
+			'align_justify' => array(
+				'name'   => 'DocumentateAlignJustify',
+				'family' => 'paragraph',
+				'props'  => array(
+					array(
+						'ns'    => self::ODF_FO_NS,
+						'name'  => 'fo:text-align',
+						'value' => 'justify',
 					),
 				),
 			),
@@ -1496,6 +1581,8 @@ class Documentate_OpenTBS {
 				$props = $doc->createElementNS( self::ODF_STYLE_NS, 'style:table-properties' );
 			} elseif ( 'table-cell' === $info['family'] ) {
 				$props = $doc->createElementNS( self::ODF_STYLE_NS, 'style:table-cell-properties' );
+			} elseif ( 'paragraph' === $info['family'] ) {
+				$props = $doc->createElementNS( self::ODF_STYLE_NS, 'style:paragraph-properties' );
 			} else {
 				$props = $doc->createElementNS( self::ODF_STYLE_NS, 'style:text-properties' );
 			}
@@ -1649,6 +1736,14 @@ class Documentate_OpenTBS {
 						if ( ! empty( $list_paragraphs ) ) {
 							$result = array_merge( $result, $list_paragraphs );
 						}
+						break;
+					case 'p':
+					case 'div':
+						$has_block        = true;
+						$p_alignment      = self::extract_text_alignment( $node );
+						$paragraph_runs   = self::collect_runs_from_children( $doc, $node->childNodes, $base_rpr, $formatting, $relationships );
+						$block_paragraph  = self::create_paragraph_from_runs( $doc, $paragraph_runs, $base_rpr, $p_alignment );
+						$result[]         = $block_paragraph;
 						break;
 					default:
 						$has_block        = true;
@@ -1962,8 +2057,19 @@ class Documentate_OpenTBS {
 					$cell_formatting['bold'] = true;
 				}
 
+				// Extract alignment from cell or first paragraph child.
+				$cell_alignment = self::extract_text_alignment( $cell );
+				if ( null === $cell_alignment ) {
+					foreach ( $cell->childNodes as $child ) {
+						if ( $child instanceof DOMElement && 'p' === strtolower( $child->nodeName ) ) {
+							$cell_alignment = self::extract_text_alignment( $child );
+							break;
+						}
+					}
+				}
+
 				// Handle block elements (lists, nested tables) inside table cells.
-				$cell_content = self::convert_cell_content_to_docx( $doc, $cell->childNodes, $base_rpr, $cell_formatting, $relationships );
+				$cell_content = self::convert_cell_content_to_docx( $doc, $cell->childNodes, $base_rpr, $cell_formatting, $relationships, $cell_alignment );
 				foreach ( $cell_content as $content_node ) {
 					if ( $content_node instanceof DOMElement ) {
 						$tc->appendChild( $content_node );
@@ -2001,9 +2107,10 @@ class Documentate_OpenTBS {
 	 * @param DOMElement|null          $base_rpr      Base run properties.
 	 * @param array<string,bool>       $formatting    Formatting flags.
 	 * @param array<string,mixed>|null $relationships Relationships context.
+	 * @param string|null              $alignment     Cell alignment (left, center, right, justify).
 	 * @return array<int,DOMElement>   Array of paragraph elements.
 	 */
-	private static function convert_cell_content_to_docx( DOMDocument $doc, $children, $base_rpr, array $formatting, &$relationships ) {
+	private static function convert_cell_content_to_docx( DOMDocument $doc, $children, $base_rpr, array $formatting, &$relationships, $alignment = null ) {
 		$result       = array();
 		$current_runs = array();
 
@@ -2027,7 +2134,7 @@ class Documentate_OpenTBS {
 			if ( 'ul' === $tag || 'ol' === $tag ) {
 				// Flush any accumulated inline runs.
 				if ( ! empty( $current_runs ) ) {
-					$result[]     = self::create_paragraph_from_runs( $doc, $current_runs, $base_rpr );
+					$result[]     = self::create_paragraph_from_runs( $doc, $current_runs, $base_rpr, $alignment );
 					$current_runs = array();
 				}
 				// Convert list to paragraphs.
@@ -2039,7 +2146,7 @@ class Documentate_OpenTBS {
 			if ( 'table' === $tag ) {
 				// Flush any accumulated inline runs.
 				if ( ! empty( $current_runs ) ) {
-					$result[]     = self::create_paragraph_from_runs( $doc, $current_runs, $base_rpr );
+					$result[]     = self::create_paragraph_from_runs( $doc, $current_runs, $base_rpr, $alignment );
 					$current_runs = array();
 				}
 				// Convert nested table.
@@ -2053,12 +2160,17 @@ class Documentate_OpenTBS {
 			if ( 'p' === $tag || 'div' === $tag ) {
 				// Flush any accumulated inline runs.
 				if ( ! empty( $current_runs ) ) {
-					$result[]     = self::create_paragraph_from_runs( $doc, $current_runs, $base_rpr );
+					$result[]     = self::create_paragraph_from_runs( $doc, $current_runs, $base_rpr, $alignment );
 					$current_runs = array();
+				}
+				// Extract paragraph-specific alignment or use cell alignment.
+				$p_alignment = self::extract_text_alignment( $child );
+				if ( null === $p_alignment ) {
+					$p_alignment = $alignment;
 				}
 				// Convert paragraph content.
 				$p_runs   = self::collect_runs_from_children( $doc, $child->childNodes, $base_rpr, $formatting, $relationships );
-				$result[] = self::create_paragraph_from_runs( $doc, $p_runs, $base_rpr );
+				$result[] = self::create_paragraph_from_runs( $doc, $p_runs, $base_rpr, $p_alignment );
 				continue;
 			}
 
@@ -2068,7 +2180,7 @@ class Documentate_OpenTBS {
 
 		// Flush remaining inline runs.
 		if ( ! empty( $current_runs ) ) {
-			$result[] = self::create_paragraph_from_runs( $doc, $current_runs, $base_rpr );
+			$result[] = self::create_paragraph_from_runs( $doc, $current_runs, $base_rpr, $alignment );
 		}
 
 		return $result;
@@ -2077,13 +2189,26 @@ class Documentate_OpenTBS {
 	/**
 	 * Create a paragraph element from a list of runs/hyperlink nodes.
 	 *
-	 * @param DOMDocument           $doc      Target DOMDocument.
-	 * @param array<int,DOMElement> $runs     Runs to append.
-	 * @param DOMElement|null       $base_rpr Base run properties reference.
+	 * @param DOMDocument           $doc       Target DOMDocument.
+	 * @param array<int,DOMElement> $runs      Runs to append.
+	 * @param DOMElement|null       $base_rpr  Base run properties reference.
+	 * @param string|null           $alignment Text alignment (left, center, right, justify).
 	 * @return DOMElement
 	 */
-	private static function create_paragraph_from_runs( DOMDocument $doc, array $runs, $base_rpr ) {
+	private static function create_paragraph_from_runs( DOMDocument $doc, array $runs, $base_rpr, $alignment = null ) {
 		$paragraph = $doc->createElementNS( self::WORD_NAMESPACE, 'w:p' );
+
+		// Add paragraph properties with justification if alignment is specified.
+		if ( null !== $alignment && 'left' !== $alignment ) {
+			// phpcs:ignore WordPress.NamingConventions.ValidVariableName.VariableNotSnakeCase -- $pPr matches WordprocessingML spec.
+			$pPr = $doc->createElementNS( self::WORD_NAMESPACE, 'w:pPr' );
+			$jc  = $doc->createElementNS( self::WORD_NAMESPACE, 'w:jc' );
+			$jc->setAttribute( 'w:val', self::css_alignment_to_docx( $alignment ) );
+			// phpcs:ignore WordPress.NamingConventions.ValidVariableName.VariableNotSnakeCase -- $pPr matches WordprocessingML spec.
+			$pPr->appendChild( $jc );
+			// phpcs:ignore WordPress.NamingConventions.ValidVariableName.VariableNotSnakeCase -- $pPr matches WordprocessingML spec.
+			$paragraph->appendChild( $pPr );
+		}
 
 		if ( empty( $runs ) ) {
 			$paragraph->appendChild( self::create_blank_run( $doc, $base_rpr ) );
@@ -2096,7 +2221,15 @@ class Documentate_OpenTBS {
 			}
 		}
 
-		if ( 0 === $paragraph->childNodes->length ) {
+		// Check if paragraph only contains pPr (no actual content).
+		$has_content = false;
+		foreach ( $paragraph->childNodes as $child ) {
+			if ( $child instanceof DOMElement && 'w:pPr' !== $child->nodeName ) {
+				$has_content = true;
+				break;
+			}
+		}
+		if ( ! $has_content ) {
 			$paragraph->appendChild( self::create_blank_run( $doc, $base_rpr ) );
 		}
 
@@ -2186,6 +2319,44 @@ class Documentate_OpenTBS {
 	private static function with_format_flag( array $formatting, $flag, $value ) {
 		$formatting[ $flag ] = $value;
 		return $formatting;
+	}
+
+	/**
+	 * Extract text-align value from an element's style attribute.
+	 *
+	 * @param DOMElement $node Element to check for alignment.
+	 * @return string|null Alignment value (left, center, right, justify) or null.
+	 */
+	private static function extract_text_alignment( DOMElement $node ) {
+		$style = $node->getAttribute( 'style' );
+		if ( empty( $style ) ) {
+			return null;
+		}
+
+		if ( preg_match( '/text-align\s*:\s*(left|center|right|justify)/i', $style, $matches ) ) {
+			return strtolower( $matches[1] );
+		}
+
+		return null;
+	}
+
+	/**
+	 * Convert CSS text-align value to DOCX w:jc value.
+	 *
+	 * @param string $alignment CSS alignment value.
+	 * @return string DOCX justification value.
+	 */
+	private static function css_alignment_to_docx( $alignment ) {
+		switch ( $alignment ) {
+			case 'center':
+				return 'center';
+			case 'right':
+				return 'right';
+			case 'justify':
+				return 'both';
+			default:
+				return 'left';
+		}
 	}
 
 	/**

@@ -621,7 +621,10 @@ class Documentate_Document_Generator {
 		$value      = is_string( $value ) ? $value : '';
 
 		if ( in_array( $field_type, array( 'rich', 'html' ), true ) ) {
-			return self::normalize_field_value( wp_kses_post( $value ), $data_type );
+			// Apply sanitization and cleanup only at generation time.
+			$sanitized = wp_kses_post( $value );
+			$sanitized = self::remove_linebreak_artifacts( $sanitized );
+			return self::normalize_field_value( $sanitized, $data_type );
 		}
 
 		if ( '' === $value ) {
@@ -716,5 +719,45 @@ class Documentate_Document_Generator {
 			return $value;
 		}
 		return wp_date( 'Y-m-d', $timestamp );
+	}
+
+	/**
+	 * Remove newline artifacts from HTML content for document generation.
+	 *
+	 * Cleans up stray newline markers and empty paragraphs that can interfere
+	 * with proper document formatting.
+	 *
+	 * @param string $value Sanitized HTML.
+	 * @return string
+	 */
+	private static function remove_linebreak_artifacts( $value ) {
+		$value = (string) $value;
+
+		// 1) Remove paragraphs that only contain stray literal newline markers (n or rn) or whitespace.
+		// NOTE: Do NOT use case-insensitive flag to avoid matching "N" in words like "Numbered".
+		$value = preg_replace( '#<p(?:[^>]*)>(?:\s|&nbsp;)*(?:rn|n)*(?:\s|&nbsp;)*</p>#', '', $value );
+		if ( ! is_string( $value ) ) {
+			$value = '';
+		}
+
+		// 2) Remove standalone markers between any two tags: >  n  <  => ><.
+		$value = preg_replace( '#>(?:\s|&nbsp;)*(?:rn|n)+(?:\s|&nbsp;)*<#', '><', $value );
+		if ( ! is_string( $value ) ) {
+			$value = '';
+		}
+
+		// 3) Remove markers right after opening block/list/table tags.
+		$value = preg_replace( '#(<(?:ul|ol|table|thead|tbody|tfoot|tr|td|th|li)[^>]*>)(?:\s|&nbsp;)*(?:rn|n)+#', '$1', $value );
+		if ( ! is_string( $value ) ) {
+			$value = '';
+		}
+
+		// 4) Remove markers right before closing block/list/table tags.
+		$value = preg_replace( '#(?:\s|&nbsp;)*(?:rn|n)+(?:\s|&nbsp;)*(</(?:ul|ol|table|thead|tbody|tfoot|tr|td|th|li)>)#', '$1', $value );
+		if ( ! is_string( $value ) ) {
+			$value = '';
+		}
+
+		return $value;
 	}
 }

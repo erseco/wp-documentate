@@ -1084,10 +1084,6 @@ add_action( 'init', 'documentate_maybe_seed_demo_documents', 60 );
 require_once plugin_dir_path( __FILE__ ) . 'includes/class-documentate.php';
 
 
-if ( defined( 'WP_CLI' ) && WP_CLI ) {
-	require_once plugin_dir_path( __FILE__ ) . 'includes/class-documentate-wpcli.php';
-}
-
 /**
  * Begins execution of the plugin.
  *

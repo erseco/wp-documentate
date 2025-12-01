@@ -1299,6 +1299,128 @@ class DocumentateDocumentsTest extends Documentate_Test_Base {
 	}
 
 	/**
+	 * Test rich field HTML is preserved through save → read → save cycle.
+	 *
+	 * This verifies that HTML content is not stripped when saving a document,
+	 * reading it back, editing another field, and saving again.
+	 */
+	public function test_rich_field_html_preserved_through_save_cycle() {
+		$term    = wp_insert_term( 'Rich HTML Type', 'documentate_doc_type' );
+		$term_id = $term['term_id'];
+
+		$storage = new SchemaStorage();
+		$storage->save_schema(
+			$term_id,
+			array(
+				'version'   => 2,
+				'fields'    => array(
+					array( 'name' => 'Title', 'slug' => 'title_field', 'type' => 'text' ),
+					array( 'name' => 'Description', 'slug' => 'description', 'type' => 'rich' ),
+				),
+				'repeaters' => array(),
+			)
+		);
+
+		$post = $this->factory->post->create_and_get( array( 'post_type' => 'documentate_document' ) );
+		wp_set_post_terms( $post->ID, array( $term_id ), 'documentate_doc_type' );
+
+		// Rich HTML content with multiple elements.
+		$html_content = '<p>First paragraph with <strong>bold</strong> and <em>italic</em>.</p>'
+			. '<p>Second paragraph.</p>'
+			. '<ul><li>Item one</li><li>Item two</li></ul>'
+			. '<table><tbody><tr><td>Cell A</td><td>Cell B</td></tr></tbody></table>';
+
+		// First save.
+		$_POST['documentate_doc_type']            = (string) $term_id;
+		$_POST['documentate_field_title_field']   = 'Original Title';
+		$_POST['documentate_field_description']   = $html_content;
+
+		$data    = array( 'post_type' => 'documentate_document' );
+		$postarr = array( 'ID' => $post->ID );
+
+		$result1 = $this->documents->filter_post_data_compose_content( $data, $postarr );
+		$content1 = wp_unslash( $result1['post_content'] );
+
+		// Parse and verify HTML is present after first save.
+		$parsed1 = Documentate_Documents::parse_structured_content( $content1 );
+		$this->assertArrayHasKey( 'description', $parsed1 );
+		$this->assertStringContainsString( '<p>', $parsed1['description']['value'] );
+		$this->assertStringContainsString( '<strong>bold</strong>', $parsed1['description']['value'] );
+		$this->assertStringContainsString( '<table>', $parsed1['description']['value'] );
+
+		// Simulate editing only the title field and saving again.
+		// The description field content comes from what was stored.
+		$_POST['documentate_field_title_field'] = 'Modified Title';
+		$_POST['documentate_field_description'] = $parsed1['description']['value'];
+
+		$result2 = $this->documents->filter_post_data_compose_content( $data, $postarr );
+		$content2 = wp_unslash( $result2['post_content'] );
+
+		// Verify HTML is still preserved after second save.
+		$parsed2 = Documentate_Documents::parse_structured_content( $content2 );
+		$this->assertArrayHasKey( 'description', $parsed2 );
+		$this->assertStringContainsString( '<p>', $parsed2['description']['value'] );
+		$this->assertStringContainsString( '</p>', $parsed2['description']['value'] );
+		$this->assertStringContainsString( '<strong>bold</strong>', $parsed2['description']['value'] );
+		$this->assertStringContainsString( '<em>italic</em>', $parsed2['description']['value'] );
+		$this->assertStringContainsString( '<ul>', $parsed2['description']['value'] );
+		$this->assertStringContainsString( '<li>Item one</li>', $parsed2['description']['value'] );
+		$this->assertStringContainsString( '<table>', $parsed2['description']['value'] );
+
+		$_POST = array();
+	}
+
+	/**
+	 * Test multiple rich fields preserve HTML independently.
+	 */
+	public function test_multiple_rich_fields_preserve_html() {
+		$term    = wp_insert_term( 'Multi Rich Type', 'documentate_doc_type' );
+		$term_id = $term['term_id'];
+
+		$storage = new SchemaStorage();
+		$storage->save_schema(
+			$term_id,
+			array(
+				'version'   => 2,
+				'fields'    => array(
+					array( 'name' => 'Intro', 'slug' => 'intro', 'type' => 'rich' ),
+					array( 'name' => 'Body', 'slug' => 'body', 'type' => 'rich' ),
+					array( 'name' => 'Conclusion', 'slug' => 'conclusion', 'type' => 'rich' ),
+				),
+				'repeaters' => array(),
+			)
+		);
+
+		$post = $this->factory->post->create_and_get( array( 'post_type' => 'documentate_document' ) );
+		wp_set_post_terms( $post->ID, array( $term_id ), 'documentate_doc_type' );
+
+		$intro      = '<p>Introduction with <strong>emphasis</strong>.</p>';
+		$body       = '<p>Body text.</p><ul><li>Point A</li><li>Point B</li></ul>';
+		$conclusion = '<p>Final <em>thoughts</em> and <a href="#">link</a>.</p>';
+
+		$_POST['documentate_doc_type']       = (string) $term_id;
+		$_POST['documentate_field_intro']      = $intro;
+		$_POST['documentate_field_body']       = $body;
+		$_POST['documentate_field_conclusion'] = $conclusion;
+
+		$data    = array( 'post_type' => 'documentate_document' );
+		$postarr = array( 'ID' => $post->ID );
+
+		$result  = $this->documents->filter_post_data_compose_content( $data, $postarr );
+		$content = wp_unslash( $result['post_content'] );
+		$parsed  = Documentate_Documents::parse_structured_content( $content );
+
+		// Verify each field preserved its HTML.
+		$this->assertStringContainsString( '<strong>emphasis</strong>', $parsed['intro']['value'] );
+		$this->assertStringContainsString( '<ul>', $parsed['body']['value'] );
+		$this->assertStringContainsString( '<li>Point A</li>', $parsed['body']['value'] );
+		$this->assertStringContainsString( '<em>thoughts</em>', $parsed['conclusion']['value'] );
+		$this->assertStringContainsString( '<a href="#">link</a>', $parsed['conclusion']['value'] );
+
+		$_POST = array();
+	}
+
+	/**
 	 * Test decode_array_field_value static method with empty.
 	 */
 	public function test_decode_array_field_value_empty() {
@@ -1367,6 +1489,53 @@ class DocumentateDocumentsTest extends Documentate_Test_Base {
 		$result = $method->invoke( $this->documents, $input );
 
 		$this->assertStringNotContainsString( '<iframe', $result );
+	}
+
+	/**
+	 * Test sanitize_rich_text_value preserves HTML structure.
+	 *
+	 * HTML content should be stored as-is (cleanup happens at generation time).
+	 */
+	public function test_sanitize_rich_text_value_preserves_html_structure() {
+		$reflection = new ReflectionClass( $this->documents );
+		$method = $reflection->getMethod( 'sanitize_rich_text_value' );
+		$method->setAccessible( true );
+
+		$input = '<p>Paragraph with <strong>bold</strong> and <em>italic</em> text.</p>'
+			. '<ul><li>Item one</li><li>Item two</li></ul>'
+			. '<table><tbody><tr><td>Cell</td></tr></tbody></table>';
+
+		$result = $method->invoke( $this->documents, $input );
+
+		// All HTML structure should be preserved.
+		$this->assertStringContainsString( '<p>', $result );
+		$this->assertStringContainsString( '</p>', $result );
+		$this->assertStringContainsString( '<strong>bold</strong>', $result );
+		$this->assertStringContainsString( '<em>italic</em>', $result );
+		$this->assertStringContainsString( '<ul>', $result );
+		$this->assertStringContainsString( '<li>Item one</li>', $result );
+		$this->assertStringContainsString( '<table>', $result );
+	}
+
+	/**
+	 * Test sanitize_rich_text_value preserves inline formatting.
+	 */
+	public function test_sanitize_rich_text_value_preserves_inline_formatting() {
+		$reflection = new ReflectionClass( $this->documents );
+		$method = $reflection->getMethod( 'sanitize_rich_text_value' );
+		$method->setAccessible( true );
+
+		$input = '<p>Text with <u>underline</u>, <s>strikethrough</s>, '
+			. '<sub>subscript</sub>, <sup>superscript</sup>, '
+			. 'and <a href="https://example.com">links</a>.</p>';
+
+		$result = $method->invoke( $this->documents, $input );
+
+		$this->assertStringContainsString( '<u>underline</u>', $result );
+		$this->assertStringContainsString( '<s>strikethrough</s>', $result );
+		$this->assertStringContainsString( '<sub>subscript</sub>', $result );
+		$this->assertStringContainsString( '<sup>superscript</sup>', $result );
+		$this->assertStringContainsString( '<a href="https://example.com">links</a>', $result );
 	}
 
 	/**

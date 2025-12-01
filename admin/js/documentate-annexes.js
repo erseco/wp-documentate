@@ -75,10 +75,12 @@ function initializeRichEditors(container) {
 		}
 		wp.editor.initialize(textarea.id, {
 			tinymce: {
-				toolbar1: 'formatselect,bold,italic,underline,link,bullist,numlist,alignleft,aligncenter,alignright,alignjustify,undo,redo,removeformat'
+				toolbar1: 'formatselect,bold,italic,underline,link,bullist,numlist,alignleft,aligncenter,alignright,alignjustify,undo,redo,removeformat',
+				wpautop: false
 			},
 			quicktags: true,
-			mediaButtons: false
+			mediaButtons: false,
+			wpautop: false
 		});
 		textarea.setAttribute('data-editor-initialized', 'true');
 	});

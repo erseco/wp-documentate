@@ -28,6 +28,10 @@
 
     // Ensure sync on form submit as well
     $('#post').on('submit', function () {
+      // Sync all TinyMCE editors to their textareas before submit
+      if (typeof tinyMCE !== 'undefined') {
+        tinyMCE.triggerSave();
+      }
       $title.val($ta.val());
     });
   }
