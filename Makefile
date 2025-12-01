@@ -48,7 +48,6 @@ clean:
 	npx wp-env clean development
 	npx wp-env clean tests
 	npx wp-env run cli wp plugin activate documentate
-# 	npx wp-env run cli wp plugin install tinymce-advanced --activate
 
 destroy:
 	npx wp-env destroy
