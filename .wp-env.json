@@ -13,7 +13,7 @@
         "https://downloads.wordpress.org/plugins/sql-buddy.zip"
     ],
     "lifecycleScripts": {
-        "afterStart": "true || wp plugin activate documentate || true",
-        "afterClean": "true || wp plugin activate documentate || true"
+        "afterStart": "wp language core install es_ES --activate && wp plugin activate documentate || true",
+        "afterClean": "wp language core install es_ES --activate && wp plugin activate documentate || true"
   }
 }
