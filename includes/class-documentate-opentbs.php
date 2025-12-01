@@ -54,6 +54,21 @@ class Documentate_OpenTBS {
 	private const ODF_XLINK_NS = 'http://www.w3.org/1999/xlink';
 
 	/**
+	 * Dublin Core namespace for document metadata.
+	 */
+	private const DC_NS = 'http://purl.org/dc/elements/1.1/';
+
+	/**
+	 * ODF meta namespace for document metadata.
+	 */
+	private const ODF_META_NS = 'urn:oasis:names:tc:opendocument:xmlns:meta:1.0';
+
+	/**
+	 * OOXML Core Properties namespace for DOCX metadata.
+	 */
+	private const CP_NS = 'http://schemas.openxmlformats.org/package/2006/metadata/core-properties';
+
+	/**
 	 * Table border style for generated documents.
 	 * Format: "width style color" (e.g., "0.5pt solid #000000").
 	 */
@@ -126,9 +141,10 @@ class Documentate_OpenTBS {
 	 * @param array  $fields        Associative fields.
 	 * @param string $dest_path     Output file path.
 	 * @param array  $rich_values   Optional rich text values (unused for ODT).
+	 * @param array  $metadata      Optional document metadata (title, subject, author, keywords).
 	 * @return bool|WP_Error
 	 */
-	public static function render_odt( $template_path, $fields, $dest_path, $rich_values = array() ) {
+	public static function render_odt( $template_path, $fields, $dest_path, $rich_values = array(), $metadata = array() ) {
 		$result = self::render_template_to_file( $template_path, $fields, $dest_path );
 		if ( is_wp_error( $result ) ) {
 			return $result;
@@ -137,6 +153,11 @@ class Documentate_OpenTBS {
 		$rich_result = self::apply_odt_rich_text( $dest_path, $rich_values );
 		if ( is_wp_error( $rich_result ) ) {
 			return $rich_result;
+		}
+
+		$meta_result = self::apply_odt_metadata( $dest_path, $metadata );
+		if ( is_wp_error( $meta_result ) ) {
+			return $meta_result;
 		}
 
 		return $result;
@@ -149,9 +170,10 @@ class Documentate_OpenTBS {
 	 * @param array  $fields        Fields map.
 	 * @param string $dest_path     Output path.
 	 * @param array  $rich_values   Rich text values detected during merge.
+	 * @param array  $metadata      Optional document metadata (title, subject, author, keywords).
 	 * @return bool|WP_Error
 	 */
-	public static function render_docx( $template_path, $fields, $dest_path, $rich_values = array() ) {
+	public static function render_docx( $template_path, $fields, $dest_path, $rich_values = array(), $metadata = array() ) {
 		$result = self::render_template_to_file( $template_path, $fields, $dest_path );
 		if ( is_wp_error( $result ) ) {
 			return $result;
@@ -160,6 +182,12 @@ class Documentate_OpenTBS {
 		if ( is_wp_error( $rich_result ) ) {
 			return $rich_result;
 		}
+
+		$meta_result = self::apply_docx_metadata( $dest_path, $metadata );
+		if ( is_wp_error( $meta_result ) ) {
+			return $meta_result;
+		}
+
 		return $result;
 	}
 
@@ -559,6 +587,236 @@ class Documentate_OpenTBS {
 		}
 
 		$zip->close();
+		return true;
+	}
+
+	/**
+	 * Apply document metadata to an ODT file's meta.xml.
+	 *
+	 * Updates the ODT's internal meta.xml file with document properties
+	 * like title, subject, creator, and keywords.
+	 *
+	 * @param string $odt_path Path to the ODT file.
+	 * @param array  $metadata Associative array with keys: title, subject, author, keywords.
+	 * @return bool|WP_Error True on success, WP_Error on failure.
+	 */
+	public static function apply_odt_metadata( $odt_path, $metadata ) {
+		if ( empty( $metadata ) || ! is_array( $metadata ) ) {
+			return true;
+		}
+
+		// Check if any metadata value is non-empty.
+		$has_values = false;
+		foreach ( $metadata as $value ) {
+			if ( ! empty( $value ) ) {
+				$has_values = true;
+				break;
+			}
+		}
+		if ( ! $has_values ) {
+			return true;
+		}
+
+		if ( ! class_exists( 'ZipArchive' ) ) {
+			return new WP_Error( 'documentate_odt_zip_missing', __( 'ZipArchive is not available for metadata.', 'documentate' ) );
+		}
+
+		$zip = new ZipArchive();
+		if ( true !== $zip->open( $odt_path ) ) {
+			return new WP_Error( 'documentate_odt_open_failed', __( 'Could not open the ODT file for metadata.', 'documentate' ) );
+		}
+
+		$xml = $zip->getFromName( 'meta.xml' );
+		if ( false === $xml ) {
+			$zip->close();
+			return new WP_Error( 'documentate_meta_missing', __( 'meta.xml not found in ODT.', 'documentate' ) );
+		}
+
+		$dom = self::create_xml_document( $xml );
+		if ( ! $dom ) {
+			$zip->close();
+			return new WP_Error( 'documentate_meta_parse', __( 'Could not parse meta.xml.', 'documentate' ) );
+		}
+
+		$xpath = new DOMXPath( $dom );
+		$xpath->registerNamespace( 'office', self::ODF_OFFICE_NS );
+		$xpath->registerNamespace( 'dc', self::DC_NS );
+		$xpath->registerNamespace( 'meta', self::ODF_META_NS );
+
+		// Find office:meta element.
+		$office_meta_list = $xpath->query( '//office:meta' );
+		if ( 0 === $office_meta_list->length ) {
+			$zip->close();
+			return new WP_Error( 'documentate_meta_element', __( 'office:meta element not found.', 'documentate' ) );
+		}
+		$office_meta = $office_meta_list->item( 0 );
+
+		// Helper to set or update an element.
+		$set_element = function ( $ns_uri, $local_name, $value ) use ( $dom, $xpath, $office_meta ) {
+			if ( empty( $value ) ) {
+				return;
+			}
+			$prefix = 'dc' === substr( $local_name, 0, 2 ) || in_array( $local_name, array( 'title', 'subject', 'creator' ), true ) ? 'dc' : 'meta';
+			$query  = ".//{$prefix}:{$local_name}";
+			$nodes  = $xpath->query( $query, $office_meta );
+
+			if ( $nodes->length > 0 ) {
+				// Update existing element.
+				$nodes->item( 0 )->textContent = $value;
+			} else {
+				// Create new element.
+				$new_el = $dom->createElementNS( $ns_uri, "{$prefix}:{$local_name}" );
+				$new_el->appendChild( $dom->createTextNode( $value ) );
+				$office_meta->appendChild( $new_el );
+			}
+		};
+
+		// Set title.
+		if ( ! empty( $metadata['title'] ) ) {
+			$set_element( self::DC_NS, 'title', $metadata['title'] );
+		}
+
+		// Set subject.
+		if ( ! empty( $metadata['subject'] ) ) {
+			$set_element( self::DC_NS, 'subject', $metadata['subject'] );
+		}
+
+		// Set creator (author) - both initial-creator (LibreOffice author) and dc:creator.
+		if ( ! empty( $metadata['author'] ) ) {
+			$set_element( self::ODF_META_NS, 'initial-creator', $metadata['author'] );
+			$set_element( self::DC_NS, 'creator', $metadata['author'] );
+		}
+
+		// Set keywords - remove existing and add new ones.
+		if ( ! empty( $metadata['keywords'] ) ) {
+			// Remove existing keyword elements.
+			$existing_keywords = $xpath->query( './/meta:keyword', $office_meta );
+			foreach ( $existing_keywords as $kw ) {
+				$office_meta->removeChild( $kw );
+			}
+
+			// Add new keyword elements.
+			$keywords_array = array_map( 'trim', explode( ',', $metadata['keywords'] ) );
+			$keywords_array = array_filter( $keywords_array );
+			foreach ( $keywords_array as $keyword ) {
+				$kw_el = $dom->createElementNS( self::ODF_META_NS, 'meta:keyword' );
+				$kw_el->appendChild( $dom->createTextNode( $keyword ) );
+				$office_meta->appendChild( $kw_el );
+			}
+		}
+
+		// Save updated meta.xml.
+		$updated_xml = $dom->saveXML();
+		$zip->addFromString( 'meta.xml', $updated_xml );
+		$zip->close();
+
+		return true;
+	}
+
+	/**
+	 * Apply document metadata to a DOCX file's docProps/core.xml.
+	 *
+	 * Updates the DOCX's internal core.xml file with document properties
+	 * like title, subject, creator, and keywords.
+	 *
+	 * @param string $docx_path Path to the DOCX file.
+	 * @param array  $metadata  Associative array with keys: title, subject, author, keywords.
+	 * @return bool|WP_Error True on success, WP_Error on failure.
+	 */
+	public static function apply_docx_metadata( $docx_path, $metadata ) {
+		if ( empty( $metadata ) || ! is_array( $metadata ) ) {
+			return true;
+		}
+
+		// Check if any metadata value is non-empty.
+		$has_values = false;
+		foreach ( $metadata as $value ) {
+			if ( ! empty( $value ) ) {
+				$has_values = true;
+				break;
+			}
+		}
+		if ( ! $has_values ) {
+			return true;
+		}
+
+		if ( ! class_exists( 'ZipArchive' ) ) {
+			return new WP_Error( 'documentate_docx_zip_missing', __( 'ZipArchive is not available for metadata.', 'documentate' ) );
+		}
+
+		$zip = new ZipArchive();
+		if ( true !== $zip->open( $docx_path ) ) {
+			return new WP_Error( 'documentate_docx_open_failed', __( 'Could not open the DOCX file for metadata.', 'documentate' ) );
+		}
+
+		$xml = $zip->getFromName( 'docProps/core.xml' );
+		if ( false === $xml ) {
+			$zip->close();
+			return new WP_Error( 'documentate_core_missing', __( 'docProps/core.xml not found in DOCX.', 'documentate' ) );
+		}
+
+		$dom = self::create_xml_document( $xml );
+		if ( ! $dom ) {
+			$zip->close();
+			return new WP_Error( 'documentate_core_parse', __( 'Could not parse core.xml.', 'documentate' ) );
+		}
+
+		$xpath = new DOMXPath( $dom );
+		$xpath->registerNamespace( 'cp', self::CP_NS );
+		$xpath->registerNamespace( 'dc', self::DC_NS );
+
+		// Find cp:coreProperties element.
+		$core_props_list = $xpath->query( '//cp:coreProperties' );
+		if ( 0 === $core_props_list->length ) {
+			$zip->close();
+			return new WP_Error( 'documentate_core_element', __( 'cp:coreProperties element not found.', 'documentate' ) );
+		}
+		$core_props = $core_props_list->item( 0 );
+
+		// Helper to set or update an element.
+		$set_element = function ( $ns_uri, $prefix, $local_name, $value ) use ( $dom, $xpath, $core_props ) {
+			if ( empty( $value ) ) {
+				return;
+			}
+			$query = ".//{$prefix}:{$local_name}";
+			$nodes = $xpath->query( $query, $core_props );
+
+			if ( $nodes->length > 0 ) {
+				// Update existing element.
+				$nodes->item( 0 )->textContent = $value;
+			} else {
+				// Create new element.
+				$new_el = $dom->createElementNS( $ns_uri, "{$prefix}:{$local_name}" );
+				$new_el->appendChild( $dom->createTextNode( $value ) );
+				$core_props->appendChild( $new_el );
+			}
+		};
+
+		// Set title.
+		if ( ! empty( $metadata['title'] ) ) {
+			$set_element( self::DC_NS, 'dc', 'title', $metadata['title'] );
+		}
+
+		// Set subject.
+		if ( ! empty( $metadata['subject'] ) ) {
+			$set_element( self::DC_NS, 'dc', 'subject', $metadata['subject'] );
+		}
+
+		// Set creator (author).
+		if ( ! empty( $metadata['author'] ) ) {
+			$set_element( self::DC_NS, 'dc', 'creator', $metadata['author'] );
+		}
+
+		// Set keywords (DOCX uses cp:keywords as comma-separated string).
+		if ( ! empty( $metadata['keywords'] ) ) {
+			$set_element( self::CP_NS, 'cp', 'keywords', $metadata['keywords'] );
+		}
+
+		// Save updated core.xml.
+		$updated_xml = $dom->saveXML();
+		$zip->addFromString( 'docProps/core.xml', $updated_xml );
+		$zip->close();
+
 		return true;
 	}
 

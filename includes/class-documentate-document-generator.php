@@ -9,6 +9,7 @@
  */
 
 use Documentate\Documents\Documents_Meta_Handler;
+use Documentate\Document\Meta\Document_Meta;
 
 /**
  * Documentate document generator service.
@@ -266,11 +267,12 @@ class Documentate_Document_Generator {
 		$fields      = self::build_merge_fields( $post_id );
 		$rich_values = self::get_rich_field_values();
 		$path        = self::build_output_path( $post_id, $template_format );
+		$metadata    = Document_Meta::get( $post_id );
 
 		if ( 'docx' === $template_format ) {
-			$res = Documentate_OpenTBS::render_docx( $template_path, $fields, $path, $rich_values );
+			$res = Documentate_OpenTBS::render_docx( $template_path, $fields, $path, $rich_values, $metadata );
 		} else {
-			$res = Documentate_OpenTBS::render_odt( $template_path, $fields, $path, $rich_values );
+			$res = Documentate_OpenTBS::render_odt( $template_path, $fields, $path, $rich_values, $metadata );
 		}
 
 		if ( is_wp_error( $res ) ) {
