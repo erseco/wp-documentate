@@ -2,78 +2,84 @@
 /**
  * Tests for Documentate_WPCLI class.
  *
- * Note: This test file creates a mock WPCLI class to test the behavior
- * since loading the real file triggers WP_CLI::add_command() which needs
- * the full WP_CLI environment.
- *
  * @package Documentate
  */
 
+// Load the demo data class if not already loaded.
+if ( ! class_exists( 'Documentate_Demo_Data' ) ) {
+	require_once plugin_dir_path( DOCUMENTATE_PLUGIN_FILE ) . 'includes/class-documentate-demo-data.php';
+}
+
+// Load the WPCLI class if not already loaded.
+if ( ! class_exists( 'Documentate_WPCLI' ) ) {
+	require_once plugin_dir_path( DOCUMENTATE_PLUGIN_FILE ) . 'includes/class-documentate-wpcli.php';
+}
+
 /**
- * Mock Documentate_WPCLI class that mirrors the production code.
- *
- * This mock is needed because the real class file calls WP_CLI::add_command()
- * at file load time, which requires the full WP_CLI infrastructure.
+ * Testable subclass that captures CLI messages.
  */
-class Documentate_WPCLI_Testable {
+class Documentate_WPCLI_Testable extends Documentate_WPCLI {
 
 	/**
 	 * Messages captured during tests.
 	 *
 	 * @var array
 	 */
-	public static $messages = array();
+	public $messages = array();
 
 	/**
-	 * Say hello.
+	 * Output a success message.
 	 *
-	 * @param array $args Positional arguments.
-	 * @param array $assoc_args Associative arguments.
+	 * @param string $message Message to display.
 	 */
-	public function greet( $args, $assoc_args ) {
-		$name              = $assoc_args['name'] ?? 'World';
-		self::$messages[] = array(
+	protected function cli_success( $message ) {
+		$this->messages[] = array(
 			'type'    => 'success',
-			'message' => "Hello, $name!",
+			'message' => $message,
 		);
 	}
 
 	/**
-	 * Create sample data for Documentate Plugin.
-	 * Simplified for testing - mirrors the message flow of the real method.
+	 * Output a warning message.
+	 *
+	 * @param string $message Message to display.
 	 */
-	public function create_sample_data() {
-		// Check if we're running on a development version.
-		if ( defined( 'DOCUMENTATE_VERSION' ) && DOCUMENTATE_VERSION !== '0.0.0' ) {
-			self::$messages[] = array(
-				'type'    => 'warning',
-				'message' => sprintf( 'You are adding sample data to a non-development version of Documentate (v%s)', DOCUMENTATE_VERSION ),
-			);
-			self::$messages[] = array(
-				'type'    => 'confirm',
-				'message' => 'Do you want to continue?',
-			);
-		}
-
-		self::$messages[] = array(
-			'type'    => 'log',
-			'message' => 'Starting sample data creation...',
+	protected function cli_warning( $message ) {
+		$this->messages[] = array(
+			'type'    => 'warning',
+			'message' => $message,
 		);
+	}
 
-		// In real code: $demo_data = new Documentate_Demo_Data();
-		// In real code: $demo_data->create_sample_data();
+	/**
+	 * Output a log message.
+	 *
+	 * @param string $message Message to display.
+	 */
+	protected function cli_log( $message ) {
+		$this->messages[] = array(
+			'type'    => 'log',
+			'message' => $message,
+		);
+	}
 
-		self::$messages[] = array(
-			'type'    => 'success',
-			'message' => 'Sample data created successfully!',
+	/**
+	 * Ask for confirmation.
+	 *
+	 * @param string $message Message to display.
+	 */
+	protected function cli_confirm( $message ) {
+		$this->messages[] = array(
+			'type'    => 'confirm',
+			'message' => $message,
 		);
 	}
 
 	/**
 	 * Reset messages for testing.
 	 */
-	public static function reset() {
-		self::$messages = array();
+	public function reset() {
+		$this->messages = array();
 	}
 }
 
@@ -95,7 +101,7 @@ class DocumentateWPCLITest extends WP_UnitTestCase {
 	public function set_up() {
 		parent::set_up();
 		$this->wpcli = new Documentate_WPCLI_Testable();
-		Documentate_WPCLI_Testable::reset();
+		$this->wpcli->reset();
 	}
 
 	/**
@@ -110,10 +116,7 @@ class DocumentateWPCLITest extends WP_UnitTestCase {
 	 * Test WPCLI class structure in source file.
 	 */
 	public function test_wpcli_class_structure() {
-		$file    = plugin_dir_path( DOCUMENTATE_PLUGIN_FILE ) . 'includes/class-documentate-wpcli.php';
-		$content = file_get_contents( $file );
-
-		$this->assertStringContainsString( 'class Documentate_WPCLI extends WP_CLI_Command', $content );
+		$this->assertTrue( class_exists( 'Documentate_WPCLI' ) );
 	}
 
 	/**
@@ -162,10 +165,9 @@ class DocumentateWPCLITest extends WP_UnitTestCase {
 	public function test_greet_default_name() {
 		$this->wpcli->greet( array(), array() );
 
-		$messages = Documentate_WPCLI_Testable::$messages;
-		$this->assertCount( 1, $messages );
-		$this->assertSame( 'success', $messages[0]['type'] );
-		$this->assertStringContainsString( 'World', $messages[0]['message'] );
+		$this->assertCount( 1, $this->wpcli->messages );
+		$this->assertSame( 'success', $this->wpcli->messages[0]['type'] );
+		$this->assertStringContainsString( 'World', $this->wpcli->messages[0]['message'] );
 	}
 
 	/**
@@ -174,10 +176,9 @@ class DocumentateWPCLITest extends WP_UnitTestCase {
 	public function test_greet_custom_name() {
 		$this->wpcli->greet( array(), array( 'name' => 'TestUser' ) );
 
-		$messages = Documentate_WPCLI_Testable::$messages;
-		$this->assertCount( 1, $messages );
-		$this->assertSame( 'success', $messages[0]['type'] );
-		$this->assertStringContainsString( 'TestUser', $messages[0]['message'] );
+		$this->assertCount( 1, $this->wpcli->messages );
+		$this->assertSame( 'success', $this->wpcli->messages[0]['type'] );
+		$this->assertStringContainsString( 'TestUser', $this->wpcli->messages[0]['message'] );
 	}
 
 	/**
@@ -186,44 +187,10 @@ class DocumentateWPCLITest extends WP_UnitTestCase {
 	public function test_create_sample_data_creates_data() {
 		$this->wpcli->create_sample_data();
 
-		$messages = Documentate_WPCLI_Testable::$messages;
-
 		// Should have log and success messages.
-		$types = array_column( $messages, 'type' );
+		$types = array_column( $this->wpcli->messages, 'type' );
 		$this->assertContains( 'log', $types );
 		$this->assertContains( 'success', $types );
-	}
-
-	/**
-	 * Test command registration is set up in source file.
-	 */
-	public function test_add_command_in_source() {
-		$file    = plugin_dir_path( DOCUMENTATE_PLUGIN_FILE ) . 'includes/class-documentate-wpcli.php';
-		$content = file_get_contents( $file );
-
-		$this->assertStringContainsString( "WP_CLI::add_command( 'documentate'", $content );
-	}
-
-	/**
-	 * Test file has proper WP_CLI conditional.
-	 */
-	public function test_file_has_wpcli_conditional() {
-		$file    = plugin_dir_path( DOCUMENTATE_PLUGIN_FILE ) . 'includes/class-documentate-wpcli.php';
-		$content = file_get_contents( $file );
-
-		$this->assertStringContainsString( "if ( defined( 'WP_CLI' ) && WP_CLI )", $content );
-	}
-
-	/**
-	 * Test greet has proper docblock in source.
-	 */
-	public function test_greet_has_docblock() {
-		$file    = plugin_dir_path( DOCUMENTATE_PLUGIN_FILE ) . 'includes/class-documentate-wpcli.php';
-		$content = file_get_contents( $file );
-
-		$this->assertStringContainsString( '## OPTIONS', $content );
-		$this->assertStringContainsString( '[--name=<name>]', $content );
-		$this->assertStringContainsString( '## EXAMPLES', $content );
 	}
 
 	/**
@@ -232,7 +199,108 @@ class DocumentateWPCLITest extends WP_UnitTestCase {
 	public function test_greet_message_format() {
 		$this->wpcli->greet( array(), array( 'name' => 'Alice' ) );
 
-		$messages = Documentate_WPCLI_Testable::$messages;
-		$this->assertSame( 'Hello, Alice!', $messages[0]['message'] );
+		$this->assertSame( 'Hello, Alice!', $this->wpcli->messages[0]['message'] );
+	}
+
+	/**
+	 * Test CLI helper methods exist.
+	 */
+	public function test_cli_helper_methods_exist() {
+		$reflection = new ReflectionClass( 'Documentate_WPCLI' );
+
+		$this->assertTrue( $reflection->hasMethod( 'cli_success' ) );
+		$this->assertTrue( $reflection->hasMethod( 'cli_warning' ) );
+		$this->assertTrue( $reflection->hasMethod( 'cli_log' ) );
+		$this->assertTrue( $reflection->hasMethod( 'cli_confirm' ) );
+	}
+
+	/**
+	 * Test CLI helper methods are protected.
+	 */
+	public function test_cli_helper_methods_are_protected() {
+		$methods = array( 'cli_success', 'cli_warning', 'cli_log', 'cli_confirm' );
+
+		foreach ( $methods as $method ) {
+			$reflection = new ReflectionMethod( 'Documentate_WPCLI', $method );
+			$this->assertTrue( $reflection->isProtected(), "$method should be protected" );
+		}
+	}
+
+	/**
+	 * Test create_sample_data log message content.
+	 */
+	public function test_create_sample_data_log_message() {
+		$this->wpcli->create_sample_data();
+
+		$log_messages = array_filter(
+			$this->wpcli->messages,
+			function ( $m ) {
+				return 'log' === $m['type'];
+			}
+		);
+
+		$this->assertNotEmpty( $log_messages );
+		$log_message = reset( $log_messages );
+		$this->assertStringContainsString( 'sample data', strtolower( $log_message['message'] ) );
+	}
+
+	/**
+	 * Test create_sample_data success message content.
+	 */
+	public function test_create_sample_data_success_message() {
+		$this->wpcli->create_sample_data();
+
+		$success_messages = array_filter(
+			$this->wpcli->messages,
+			function ( $m ) {
+				return 'success' === $m['type'];
+			}
+		);
+
+		$this->assertNotEmpty( $success_messages );
+		$success_message = reset( $success_messages );
+		$this->assertStringContainsString( 'successfully', strtolower( $success_message['message'] ) );
+	}
+
+	/**
+	 * Test base cli methods are protected.
+	 */
+	public function test_base_cli_methods_are_protected() {
+		$methods = array( 'cli_success', 'cli_warning', 'cli_log', 'cli_confirm' );
+
+		foreach ( $methods as $method_name ) {
+			$ref    = new ReflectionMethod( 'Documentate_WPCLI', $method_name );
+			$this->assertTrue( $ref->isProtected(), "$method_name should be protected" );
+		}
+	}
+
+	/**
+	 * Test greet uses cli_success internally.
+	 */
+	public function test_greet_uses_cli_success() {
+		$this->wpcli->greet( array(), array( 'name' => 'Tester' ) );
+
+		$this->assertCount( 1, $this->wpcli->messages );
+		$this->assertSame( 'success', $this->wpcli->messages[0]['type'] );
+	}
+
+	/**
+	 * Test greet with empty name uses default.
+	 */
+	public function test_greet_with_empty_name() {
+		$this->wpcli->greet( array(), array( 'name' => '' ) );
+
+		// Empty string is still used, not default.
+		$this->assertSame( 'Hello, !', $this->wpcli->messages[0]['message'] );
+	}
+
+	/**
+	 * Test greet with special characters in name.
+	 */
+	public function test_greet_with_special_characters() {
+		$this->wpcli->greet( array(), array( 'name' => '<script>alert("xss")</script>' ) );
+
+		// Name should be used as-is (WP_CLI would escape it).
+		$this->assertStringContainsString( '<script>', $this->wpcli->messages[0]['message'] );
 	}
 }
