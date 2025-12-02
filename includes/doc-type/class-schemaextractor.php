@@ -227,16 +227,25 @@ class SchemaExtractor {
 
 		if ( 'docx' === $template_type ) {
 			$patterns = array(
+				'#</w:t>\s*</w:r>\s*<w:r[^>]*>\s*<w:t[^>]*>#i',
 				'#</w:t>\s*<w:r[^>]*>\s*<w:t[^>]*>#i',
 				'#</w:t>\s*<w:t[^>]*>#i',
 			);
 			$xml = preg_replace( $patterns, '', $xml );
 		} else {
-			$patterns = array(
-				'#</text:span>\s*<text:span[^>]*>#i',
-				'#</text:p>\s*<text:p[^>]*>#i',
-			);
-			$xml = preg_replace( $patterns, ' ', $xml );
+			// Handle nested spans: multiple closing tags followed by multiple opening tags.
+			// Loop to collapse nested structures like </span></span><span><span>.
+			$prev = '';
+			while ( $prev !== $xml ) {
+				$prev = $xml;
+				$xml  = preg_replace(
+					'#(</text:span>\s*)+(<text:span[^>]*>\s*)+#i',
+					' ',
+					$xml
+				);
+			}
+			// Also collapse paragraph boundaries.
+			$xml = preg_replace( '#</text:p>\s*<text:p[^>]*>#i', ' ', $xml );
 		}
 
 		$xml = preg_replace( '/[\x00-\x1F\x7F]/', '', $xml );
