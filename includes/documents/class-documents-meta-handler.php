@@ -175,10 +175,14 @@ class Documents_Meta_Handler {
 	}
 
 	/**
-	 * Check if a value contains block-level HTML that requires rich text handling.
+	 * Check if a value contains HTML that requires rich text handling.
+	 *
+	 * Detects both block-level elements (p, div, table, etc.) and inline
+	 * formatting elements (strong, em, a, etc.) to ensure content is
+	 * preserved correctly during sanitization.
 	 *
 	 * @param string $value Field value to check.
-	 * @return bool True if value contains block HTML tags.
+	 * @return bool True if value contains HTML tags that need rich handling.
 	 */
 	public static function value_contains_block_html( $value ) {
 		if ( ! is_string( $value ) || '' === $value ) {
@@ -188,6 +192,16 @@ class Documents_Meta_Handler {
 		$block_tags = array( 'table', 'thead', 'tbody', 'tr', 'td', 'th', 'ul', 'ol', 'li', 'p', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'pre' );
 		foreach ( $block_tags as $tag ) {
 			if ( false !== stripos( $value, '<' . $tag ) ) {
+				return true;
+			}
+		}
+		// Inline formatting elements - detect these to preserve rich content
+		// even when TinyMCE doesn't wrap in <p> tags.
+		// Use regex to match complete tag names (avoid '<script' matching '<s').
+		$inline_tags = array( 'strong', 'b', 'em', 'i', 'u', 'a', 'span', 'br', 'sub', 'sup', 's', 'strike' );
+		foreach ( $inline_tags as $tag ) {
+			// Match <tag> or <tag with attributes (e.g., <a href="...">).
+			if ( preg_match( '/<' . $tag . '(?:\s|>|\/)/i', $value ) ) {
 				return true;
 			}
 		}

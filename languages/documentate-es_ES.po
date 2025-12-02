@@ -316,12 +316,6 @@ msgstr "y define dentro los campos de cada elemento."
 msgid "Quick examples:"
 msgstr "Ejemplos rápidos:"
 
-msgid "Tip: in DOCX the text can be fragmented; make sure each marker"
-msgstr "Consejo: en DOCX el texto puede fragmentarse; asegúrate de que cada marcador"
-
-msgid "remains intact."
-msgstr "queda íntegro."
-
 msgid "Documentate Converter"
 msgstr "Conversor de Documentate"
 
@@ -781,20 +775,6 @@ msgstr "palabra1, palabra2"
 msgid "Comma-separated list."
 msgstr "Lista separada por comas."
 
-#. translators: %s: plugin version number.
-#, php-format
-msgid "You are adding sample data to a non-development version of Documentate (v%s)"
-msgstr "Estás añadiendo datos de ejemplo a una versión no de desarrollo de Documentate (v%s)"
-
-msgid "Do you want to continue?"
-msgstr "¿Deseas continuar?"
-
-msgid "Starting sample data creation..."
-msgstr "Iniciando creación de datos de ejemplo..."
-
-msgid "Sample data created successfully!"
-msgstr "¡Datos de ejemplo creados correctamente!"
-
 msgid "Generated file not found."
 msgstr "Fichero generado no encontrado."
 
@@ -812,3 +792,72 @@ msgstr "Enviando al servidor de Collabora."
 
 msgid "Collabora returned an empty response."
 msgstr "Collabora devolvió una respuesta vacía."
+
+msgid "Title is required."
+msgstr "El título es obligatorio."
+
+msgid "Enter document title"
+msgstr "Introduce el título del documento"
+
+msgid "ZipArchive is not available for metadata."
+msgstr "ZipArchive no está disponible para metadatos."
+
+msgid "Could not open the ODT file for metadata."
+msgstr "No se pudo abrir el archivo ODT para metadatos."
+
+msgid "meta.xml not found in ODT."
+msgstr "meta.xml no encontrado en ODT."
+
+msgid "Could not parse meta.xml."
+msgstr "No se pudo analizar meta.xml."
+
+msgid "office:meta element not found."
+msgstr "Elemento office:meta no encontrado."
+
+msgid "Could not open the DOCX file for metadata."
+msgstr "No se pudo abrir el archivo DOCX para metadatos."
+
+msgid "docProps/core.xml not found in DOCX."
+msgstr "docProps/core.xml no encontrado en DOCX."
+
+msgid "Could not parse core.xml."
+msgstr "No se pudo analizar core.xml."
+
+msgid "cp:coreProperties element not found."
+msgstr "Elemento cp:coreProperties no encontrado."
+
+msgid "Case"
+msgstr "Capitalización"
+
+msgid "Text case transformation in the generated document."
+msgstr "Transformación de mayúsculas/minúsculas del texto en el documento generado."
+
+msgid "Repeater in tables:"
+msgstr "Repetidor en tablas:"
+
+msgid "to repeat table rows, use"
+msgstr "para repetir filas de tabla, usa"
+
+msgid "in the first field of the row instead of block=begin/end."
+msgstr "en el primer campo de la fila en lugar de block=begin/end."
+
+msgid "-- Table row:"
+msgstr "-- Fila de tabla:"
+
+msgid "Tip: in ODT/DOCX the text can be fragmented internally. To ensure each marker"
+msgstr "Consejo: en ODT/DOCX el texto puede fragmentarse internamente. Para asegurar que cada marcador"
+
+msgid "remains intact, write it in a plain text editor, then copy and paste without formatting."
+msgstr "quede íntegro, escríbelo en un editor de texto plano y luego copia y pega sin formato."
+
+msgid "Date format"
+msgstr "Formato de fecha"
+
+msgid "for date fields. Uses"
+msgstr "para campos de fecha. Usa"
+
+msgid "Default:"
+msgstr "Por defecto:"
+
+msgid "Examples:"
+msgstr "Ejemplos:"

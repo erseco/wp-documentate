@@ -719,9 +719,9 @@ class DocumentateDocumentGeneratorTest extends WP_UnitTestCase {
 	 * Test generate_docx with real template from fixtures.
 	 */
 	public function test_generate_docx_with_real_template() {
-		$fixture_path = plugin_dir_path( DOCUMENTATE_PLUGIN_FILE ) . 'fixtures/plantilla.docx';
+		$fixture_path = plugin_dir_path( DOCUMENTATE_PLUGIN_FILE ) . 'fixtures/demo-wp-documentate.docx';
 		if ( ! file_exists( $fixture_path ) ) {
-			$this->markTestSkipped( 'Fixture plantilla.docx not found.' );
+			$this->markTestSkipped( 'Fixture demo-wp-documentate.docx not found.' );
 		}
 
 		// Create admin user.
@@ -771,9 +771,9 @@ class DocumentateDocumentGeneratorTest extends WP_UnitTestCase {
 	 * Test generate_odt with real template from fixtures.
 	 */
 	public function test_generate_odt_with_real_template() {
-		$fixture_path = plugin_dir_path( DOCUMENTATE_PLUGIN_FILE ) . 'fixtures/plantilla.odt';
+		$fixture_path = plugin_dir_path( DOCUMENTATE_PLUGIN_FILE ) . 'fixtures/resolucion.odt';
 		if ( ! file_exists( $fixture_path ) ) {
-			$this->markTestSkipped( 'Fixture plantilla.odt not found.' );
+			$this->markTestSkipped( 'Fixture resolucion.odt not found.' );
 		}
 
 		// Create admin user.
@@ -821,9 +821,9 @@ class DocumentateDocumentGeneratorTest extends WP_UnitTestCase {
 	 * Test get_template_path returns correct path for ODT.
 	 */
 	public function test_get_template_path_odt() {
-		$fixture_path = plugin_dir_path( DOCUMENTATE_PLUGIN_FILE ) . 'fixtures/plantilla.odt';
+		$fixture_path = plugin_dir_path( DOCUMENTATE_PLUGIN_FILE ) . 'fixtures/resolucion.odt';
 		if ( ! file_exists( $fixture_path ) ) {
-			$this->markTestSkipped( 'Fixture plantilla.odt not found.' );
+			$this->markTestSkipped( 'Fixture resolucion.odt not found.' );
 		}
 
 		$admin_id = $this->factory()->user->create( array( 'role' => 'administrator' ) );
@@ -855,9 +855,9 @@ class DocumentateDocumentGeneratorTest extends WP_UnitTestCase {
 	 * Test get_template_path returns correct path for DOCX.
 	 */
 	public function test_get_template_path_docx() {
-		$fixture_path = plugin_dir_path( DOCUMENTATE_PLUGIN_FILE ) . 'fixtures/plantilla.docx';
+		$fixture_path = plugin_dir_path( DOCUMENTATE_PLUGIN_FILE ) . 'fixtures/demo-wp-documentate.docx';
 		if ( ! file_exists( $fixture_path ) ) {
-			$this->markTestSkipped( 'Fixture plantilla.docx not found.' );
+			$this->markTestSkipped( 'Fixture demo-wp-documentate.docx not found.' );
 		}
 
 		$admin_id = $this->factory()->user->create( array( 'role' => 'administrator' ) );
@@ -1093,17 +1093,43 @@ class DocumentateDocumentGeneratorTest extends WP_UnitTestCase {
 		// Empty string.
 		$this->assertSame( '', $method->invoke( null, '' ) );
 
-		// Standard ISO date.
+		// Standard ISO date with default format (d/m/Y).
 		$result = $method->invoke( null, '2024-03-15' );
-		$this->assertSame( '2024-03-15', $result );
+		$this->assertSame( '15/03/2024', $result );
 
-		// Date with time.
+		// Date with time, default format.
 		$result = $method->invoke( null, '2024-03-15 10:30:00' );
-		$this->assertSame( '2024-03-15', $result );
+		$this->assertSame( '15/03/2024', $result );
 
 		// Invalid date.
 		$result = $method->invoke( null, 'not-a-date' );
 		$this->assertSame( 'not-a-date', $result );
+	}
+
+	/**
+	 * Test normalize_date_value with custom formats.
+	 */
+	public function test_normalize_date_value_with_custom_format() {
+		$ref    = new ReflectionClass( Documentate_Document_Generator::class );
+		$method = $ref->getMethod( 'normalize_date_value' );
+		$method->setAccessible( true );
+
+		// ISO format.
+		$result = $method->invoke( null, '2024-03-15', 'Y-m-d' );
+		$this->assertSame( '2024-03-15', $result );
+
+		// European format with dots.
+		$result = $method->invoke( null, '2024-03-15', 'd.m.Y' );
+		$this->assertSame( '15.03.2024', $result );
+
+		// Long format with escaped literals.
+		$result = $method->invoke( null, '2024-03-15', 'j \d\e F \d\e Y' );
+		$this->assertStringContainsString( '15 de', $result );
+		$this->assertStringContainsString( 'de 2024', $result );
+
+		// Empty value with custom format.
+		$result = $method->invoke( null, '', 'Y-m-d' );
+		$this->assertSame( '', $result );
 	}
 
 	/**
@@ -1316,6 +1342,95 @@ class DocumentateDocumentGeneratorTest extends WP_UnitTestCase {
 		$result = $get->invoke( null );
 
 		$this->assertEmpty( $result );
+	}
+
+	/**
+	 * Test that title is NOT transformed when no case attribute in schema.
+	 */
+	public function test_title_no_case_transformation_by_default() {
+		$post_id = wp_insert_post(
+			array(
+				'post_type'   => 'documentate_document',
+				'post_title'  => 'mi título de prueba',
+				'post_status' => 'publish',
+			)
+		);
+
+		// No document type assigned - no case transformation.
+		$ref    = new ReflectionClass( Documentate_Document_Generator::class );
+		$method = $ref->getMethod( 'build_merge_fields' );
+		$method->setAccessible( true );
+
+		$fields = $method->invoke( null, $post_id );
+
+		$this->assertSame( 'mi título de prueba', $fields['title'], 'Title must NOT be transformed without case attribute.' );
+
+		wp_delete_post( $post_id, true );
+	}
+
+	/**
+	 * Test apply_case_transformation with uppercase.
+	 */
+	public function test_apply_case_transformation_upper() {
+		$ref    = new ReflectionClass( Documentate_Document_Generator::class );
+		$method = $ref->getMethod( 'apply_case_transformation' );
+		$method->setAccessible( true );
+
+		$result = $method->invoke( null, 'mi título de prueba', 'upper' );
+
+		$this->assertSame( 'MI TÍTULO DE PRUEBA', $result, 'Must transform to uppercase.' );
+	}
+
+	/**
+	 * Test apply_case_transformation with lowercase.
+	 */
+	public function test_apply_case_transformation_lower() {
+		$ref    = new ReflectionClass( Documentate_Document_Generator::class );
+		$method = $ref->getMethod( 'apply_case_transformation' );
+		$method->setAccessible( true );
+
+		$result = $method->invoke( null, 'MI TÍTULO DE PRUEBA', 'lower' );
+
+		$this->assertSame( 'mi título de prueba', $result, 'Must transform to lowercase.' );
+	}
+
+	/**
+	 * Test apply_case_transformation with title case.
+	 */
+	public function test_apply_case_transformation_title() {
+		$ref    = new ReflectionClass( Documentate_Document_Generator::class );
+		$method = $ref->getMethod( 'apply_case_transformation' );
+		$method->setAccessible( true );
+
+		$result = $method->invoke( null, 'mi título de prueba', 'title' );
+
+		$this->assertSame( 'Mi Título De Prueba', $result, 'Must transform to title case.' );
+	}
+
+	/**
+	 * Test apply_case_transformation with empty case (no transformation).
+	 */
+	public function test_apply_case_transformation_empty() {
+		$ref    = new ReflectionClass( Documentate_Document_Generator::class );
+		$method = $ref->getMethod( 'apply_case_transformation' );
+		$method->setAccessible( true );
+
+		$result = $method->invoke( null, 'Mi Título De Prueba', '' );
+
+		$this->assertSame( 'Mi Título De Prueba', $result, 'Must not transform with empty case.' );
+	}
+
+	/**
+	 * Test apply_case_transformation handles special characters correctly.
+	 */
+	public function test_apply_case_transformation_special_characters() {
+		$ref    = new ReflectionClass( Documentate_Document_Generator::class );
+		$method = $ref->getMethod( 'apply_case_transformation' );
+		$method->setAccessible( true );
+
+		$result = $method->invoke( null, 'título con ñ, ü, á, é, í, ó, ú', 'upper' );
+
+		$this->assertSame( 'TÍTULO CON Ñ, Ü, Á, É, Í, Ó, Ú', $result, 'Must handle special characters correctly.' );
 	}
 
 }

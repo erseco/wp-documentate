@@ -27,6 +27,7 @@
 		 */
 		editableSelectors: [
 			'#title',
+			'#documentate_title_textarea',
 			'#titlewrap input',
 			'#content',
 			'#postdivrich',
@@ -74,6 +75,22 @@
 					self.lockFields();
 				}
 			});
+
+			// Lock TinyMCE editors when they are initialized (after page load).
+			if (this.config.isPublished && typeof tinyMCE !== 'undefined') {
+				tinyMCE.on('AddEditor', function (e) {
+					if (e.editor && e.editor.on) {
+						e.editor.on('init', function () {
+							// Delay to ensure mode API is available.
+							setTimeout(function () {
+								if (e.editor.mode && typeof e.editor.mode.set === 'function') {
+									e.editor.mode.set('readonly');
+								}
+							}, 100);
+						});
+					}
+				});
+			}
 
 			// Monitor status changes in publish box.
 			$(document).on(
@@ -165,6 +182,15 @@
 				true
 			);
 
+			// Disable ALL TinyMCE toolbar buttons.
+			$('.mce-btn').addClass('mce-disabled').attr('aria-disabled', 'true');
+
+			// Disable ALL quicktags buttons.
+			$('.quicktags-toolbar .ed_button').prop('disabled', true).addClass('documentate-locked');
+
+			// Hide editor mode tabs (Visual/Code) to prevent switching.
+			$('.wp-editor-tabs').hide();
+
 			// Lock array/repeater field controls.
 			this.lockArrayFields();
 
@@ -218,14 +244,30 @@
 		 * Add a visual overlay to locked sections.
 		 */
 		addLockedOverlay: function () {
-			var $container = $(
-				'#documentate_document_sections, .documentate-sections-container'
-			);
+			var self = this;
+
+			// Target the .inside container of the sections meta box.
+			var $container = $('#documentate_sections .inside');
+
+			// Fallback to sections container if meta box structure is different.
+			if (!$container.length) {
+				$container = $('.documentate-sections-container');
+			}
 
 			if ($container.length && !$container.find('.locked-overlay').length) {
 				$container.css('position', 'relative');
+
+				var message = self.config.strings && self.config.strings.lockedMessage
+					? self.config.strings.lockedMessage
+					: 'This document is published and cannot be edited.';
+
 				$container.append(
-					'<div class="locked-overlay"><span class="dashicons dashicons-lock"></span></div>'
+					'<div class="locked-overlay">' +
+					'<div class="locked-message">' +
+					'<span class="dashicons dashicons-lock"></span>' +
+					'<span>' + message + '</span>' +
+					'</div>' +
+					'</div>'
 				);
 			}
 		},

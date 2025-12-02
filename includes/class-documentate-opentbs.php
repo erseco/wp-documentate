@@ -54,6 +54,33 @@ class Documentate_OpenTBS {
 	private const ODF_XLINK_NS = 'http://www.w3.org/1999/xlink';
 
 	/**
+	 * Dublin Core namespace for document metadata.
+	 */
+	private const DC_NS = 'http://purl.org/dc/elements/1.1/';
+
+	/**
+	 * ODF meta namespace for document metadata.
+	 */
+	private const ODF_META_NS = 'urn:oasis:names:tc:opendocument:xmlns:meta:1.0';
+
+	/**
+	 * OOXML Core Properties namespace for DOCX metadata.
+	 */
+	private const CP_NS = 'http://schemas.openxmlformats.org/package/2006/metadata/core-properties';
+
+	/**
+	 * Table border style for generated documents.
+	 * Format: "width style color" (e.g., "0.5pt solid #000000").
+	 */
+	public const TABLE_BORDER = '0.5pt solid #000000';
+
+	/**
+	 * Table cell padding for generated documents.
+	 * Uses ODF fo:padding format (e.g., "0.049cm" is similar to Word default).
+	 */
+	public const TABLE_CELL_PADDING = '0.049cm';
+
+	/**
 	 * Create a DOMDocument configured for XML parsing.
 	 *
 	 * @param string $xml XML content to load.
@@ -114,9 +141,10 @@ class Documentate_OpenTBS {
 	 * @param array  $fields        Associative fields.
 	 * @param string $dest_path     Output file path.
 	 * @param array  $rich_values   Optional rich text values (unused for ODT).
+	 * @param array  $metadata      Optional document metadata (title, subject, author, keywords).
 	 * @return bool|WP_Error
 	 */
-	public static function render_odt( $template_path, $fields, $dest_path, $rich_values = array() ) {
+	public static function render_odt( $template_path, $fields, $dest_path, $rich_values = array(), $metadata = array() ) {
 		$result = self::render_template_to_file( $template_path, $fields, $dest_path );
 		if ( is_wp_error( $result ) ) {
 			return $result;
@@ -125,6 +153,11 @@ class Documentate_OpenTBS {
 		$rich_result = self::apply_odt_rich_text( $dest_path, $rich_values );
 		if ( is_wp_error( $rich_result ) ) {
 			return $rich_result;
+		}
+
+		$meta_result = self::apply_odt_metadata( $dest_path, $metadata );
+		if ( is_wp_error( $meta_result ) ) {
+			return $meta_result;
 		}
 
 		return $result;
@@ -137,9 +170,10 @@ class Documentate_OpenTBS {
 	 * @param array  $fields        Fields map.
 	 * @param string $dest_path     Output path.
 	 * @param array  $rich_values   Rich text values detected during merge.
+	 * @param array  $metadata      Optional document metadata (title, subject, author, keywords).
 	 * @return bool|WP_Error
 	 */
-	public static function render_docx( $template_path, $fields, $dest_path, $rich_values = array() ) {
+	public static function render_docx( $template_path, $fields, $dest_path, $rich_values = array(), $metadata = array() ) {
 		$result = self::render_template_to_file( $template_path, $fields, $dest_path );
 		if ( is_wp_error( $result ) ) {
 			return $result;
@@ -148,6 +182,12 @@ class Documentate_OpenTBS {
 		if ( is_wp_error( $rich_result ) ) {
 			return $rich_result;
 		}
+
+		$meta_result = self::apply_docx_metadata( $dest_path, $metadata );
+		if ( is_wp_error( $meta_result ) ) {
+			return $meta_result;
+		}
+
 		return $result;
 	}
 
@@ -551,6 +591,236 @@ class Documentate_OpenTBS {
 	}
 
 	/**
+	 * Apply document metadata to an ODT file's meta.xml.
+	 *
+	 * Updates the ODT's internal meta.xml file with document properties
+	 * like title, subject, creator, and keywords.
+	 *
+	 * @param string $odt_path Path to the ODT file.
+	 * @param array  $metadata Associative array with keys: title, subject, author, keywords.
+	 * @return bool|WP_Error True on success, WP_Error on failure.
+	 */
+	public static function apply_odt_metadata( $odt_path, $metadata ) {
+		if ( empty( $metadata ) || ! is_array( $metadata ) ) {
+			return true;
+		}
+
+		// Check if any metadata value is non-empty.
+		$has_values = false;
+		foreach ( $metadata as $value ) {
+			if ( ! empty( $value ) ) {
+				$has_values = true;
+				break;
+			}
+		}
+		if ( ! $has_values ) {
+			return true;
+		}
+
+		if ( ! class_exists( 'ZipArchive' ) ) {
+			return new WP_Error( 'documentate_odt_zip_missing', __( 'ZipArchive is not available for metadata.', 'documentate' ) );
+		}
+
+		$zip = new ZipArchive();
+		if ( true !== $zip->open( $odt_path ) ) {
+			return new WP_Error( 'documentate_odt_open_failed', __( 'Could not open the ODT file for metadata.', 'documentate' ) );
+		}
+
+		$xml = $zip->getFromName( 'meta.xml' );
+		if ( false === $xml ) {
+			$zip->close();
+			return new WP_Error( 'documentate_meta_missing', __( 'meta.xml not found in ODT.', 'documentate' ) );
+		}
+
+		$dom = self::create_xml_document( $xml );
+		if ( ! $dom ) {
+			$zip->close();
+			return new WP_Error( 'documentate_meta_parse', __( 'Could not parse meta.xml.', 'documentate' ) );
+		}
+
+		$xpath = new DOMXPath( $dom );
+		$xpath->registerNamespace( 'office', self::ODF_OFFICE_NS );
+		$xpath->registerNamespace( 'dc', self::DC_NS );
+		$xpath->registerNamespace( 'meta', self::ODF_META_NS );
+
+		// Find office:meta element.
+		$office_meta_list = $xpath->query( '//office:meta' );
+		if ( 0 === $office_meta_list->length ) {
+			$zip->close();
+			return new WP_Error( 'documentate_meta_element', __( 'office:meta element not found.', 'documentate' ) );
+		}
+		$office_meta = $office_meta_list->item( 0 );
+
+		// Helper to set or update an element.
+		$set_element = function ( $ns_uri, $local_name, $value ) use ( $dom, $xpath, $office_meta ) {
+			if ( empty( $value ) ) {
+				return;
+			}
+			$prefix = 'dc' === substr( $local_name, 0, 2 ) || in_array( $local_name, array( 'title', 'subject', 'creator' ), true ) ? 'dc' : 'meta';
+			$query  = ".//{$prefix}:{$local_name}";
+			$nodes  = $xpath->query( $query, $office_meta );
+
+			if ( $nodes->length > 0 ) {
+				// Update existing element.
+				$nodes->item( 0 )->textContent = $value;
+			} else {
+				// Create new element.
+				$new_el = $dom->createElementNS( $ns_uri, "{$prefix}:{$local_name}" );
+				$new_el->appendChild( $dom->createTextNode( $value ) );
+				$office_meta->appendChild( $new_el );
+			}
+		};
+
+		// Set title.
+		if ( ! empty( $metadata['title'] ) ) {
+			$set_element( self::DC_NS, 'title', $metadata['title'] );
+		}
+
+		// Set subject.
+		if ( ! empty( $metadata['subject'] ) ) {
+			$set_element( self::DC_NS, 'subject', $metadata['subject'] );
+		}
+
+		// Set creator (author) - both initial-creator (LibreOffice author) and dc:creator.
+		if ( ! empty( $metadata['author'] ) ) {
+			$set_element( self::ODF_META_NS, 'initial-creator', $metadata['author'] );
+			$set_element( self::DC_NS, 'creator', $metadata['author'] );
+		}
+
+		// Set keywords - remove existing and add new ones.
+		if ( ! empty( $metadata['keywords'] ) ) {
+			// Remove existing keyword elements.
+			$existing_keywords = $xpath->query( './/meta:keyword', $office_meta );
+			foreach ( $existing_keywords as $kw ) {
+				$office_meta->removeChild( $kw );
+			}
+
+			// Add new keyword elements.
+			$keywords_array = array_map( 'trim', explode( ',', $metadata['keywords'] ) );
+			$keywords_array = array_filter( $keywords_array );
+			foreach ( $keywords_array as $keyword ) {
+				$kw_el = $dom->createElementNS( self::ODF_META_NS, 'meta:keyword' );
+				$kw_el->appendChild( $dom->createTextNode( $keyword ) );
+				$office_meta->appendChild( $kw_el );
+			}
+		}
+
+		// Save updated meta.xml.
+		$updated_xml = $dom->saveXML();
+		$zip->addFromString( 'meta.xml', $updated_xml );
+		$zip->close();
+
+		return true;
+	}
+
+	/**
+	 * Apply document metadata to a DOCX file's docProps/core.xml.
+	 *
+	 * Updates the DOCX's internal core.xml file with document properties
+	 * like title, subject, creator, and keywords.
+	 *
+	 * @param string $docx_path Path to the DOCX file.
+	 * @param array  $metadata  Associative array with keys: title, subject, author, keywords.
+	 * @return bool|WP_Error True on success, WP_Error on failure.
+	 */
+	public static function apply_docx_metadata( $docx_path, $metadata ) {
+		if ( empty( $metadata ) || ! is_array( $metadata ) ) {
+			return true;
+		}
+
+		// Check if any metadata value is non-empty.
+		$has_values = false;
+		foreach ( $metadata as $value ) {
+			if ( ! empty( $value ) ) {
+				$has_values = true;
+				break;
+			}
+		}
+		if ( ! $has_values ) {
+			return true;
+		}
+
+		if ( ! class_exists( 'ZipArchive' ) ) {
+			return new WP_Error( 'documentate_docx_zip_missing', __( 'ZipArchive is not available for metadata.', 'documentate' ) );
+		}
+
+		$zip = new ZipArchive();
+		if ( true !== $zip->open( $docx_path ) ) {
+			return new WP_Error( 'documentate_docx_open_failed', __( 'Could not open the DOCX file for metadata.', 'documentate' ) );
+		}
+
+		$xml = $zip->getFromName( 'docProps/core.xml' );
+		if ( false === $xml ) {
+			$zip->close();
+			return new WP_Error( 'documentate_core_missing', __( 'docProps/core.xml not found in DOCX.', 'documentate' ) );
+		}
+
+		$dom = self::create_xml_document( $xml );
+		if ( ! $dom ) {
+			$zip->close();
+			return new WP_Error( 'documentate_core_parse', __( 'Could not parse core.xml.', 'documentate' ) );
+		}
+
+		$xpath = new DOMXPath( $dom );
+		$xpath->registerNamespace( 'cp', self::CP_NS );
+		$xpath->registerNamespace( 'dc', self::DC_NS );
+
+		// Find cp:coreProperties element.
+		$core_props_list = $xpath->query( '//cp:coreProperties' );
+		if ( 0 === $core_props_list->length ) {
+			$zip->close();
+			return new WP_Error( 'documentate_core_element', __( 'cp:coreProperties element not found.', 'documentate' ) );
+		}
+		$core_props = $core_props_list->item( 0 );
+
+		// Helper to set or update an element.
+		$set_element = function ( $ns_uri, $prefix, $local_name, $value ) use ( $dom, $xpath, $core_props ) {
+			if ( empty( $value ) ) {
+				return;
+			}
+			$query = ".//{$prefix}:{$local_name}";
+			$nodes = $xpath->query( $query, $core_props );
+
+			if ( $nodes->length > 0 ) {
+				// Update existing element.
+				$nodes->item( 0 )->textContent = $value;
+			} else {
+				// Create new element.
+				$new_el = $dom->createElementNS( $ns_uri, "{$prefix}:{$local_name}" );
+				$new_el->appendChild( $dom->createTextNode( $value ) );
+				$core_props->appendChild( $new_el );
+			}
+		};
+
+		// Set title.
+		if ( ! empty( $metadata['title'] ) ) {
+			$set_element( self::DC_NS, 'dc', 'title', $metadata['title'] );
+		}
+
+		// Set subject.
+		if ( ! empty( $metadata['subject'] ) ) {
+			$set_element( self::DC_NS, 'dc', 'subject', $metadata['subject'] );
+		}
+
+		// Set creator (author).
+		if ( ! empty( $metadata['author'] ) ) {
+			$set_element( self::DC_NS, 'dc', 'creator', $metadata['author'] );
+		}
+
+		// Set keywords (DOCX uses cp:keywords as comma-separated string).
+		if ( ! empty( $metadata['keywords'] ) ) {
+			$set_element( self::CP_NS, 'cp', 'keywords', $metadata['keywords'] );
+		}
+
+		// Save updated core.xml.
+		$updated_xml = $dom->saveXML();
+		$zip->addFromString( 'docProps/core.xml', $updated_xml );
+		$zip->close();
+
+		return true;
+	}
+
+	/**
 	 * Convert HTML placeholders inside an ODT XML part to styled markup.
 	 *
 	 * CHANGE: Expose rich text conversion for direct usage in tests and callers.
@@ -713,13 +983,16 @@ class Documentate_OpenTBS {
 			$paragraph->removeChild( $child );
 		}
 
-		// Insert new nodes. Tables need to be inserted after the paragraph.
+		// Insert new nodes. Block-level elements need to be inserted after the paragraph.
 		$parent = $paragraph->parentNode; // phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase
 		$next_sibling = $paragraph->nextSibling; // phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase
 
 		foreach ( $nodes_to_insert as $node ) {
-			if ( $node instanceof DOMElement && self::ODF_TABLE_NS === $node->namespaceURI && 'table' === $node->localName ) {
-				// Tables must be siblings of paragraphs, not children.
+			$is_table     = $node instanceof DOMElement && self::ODF_TABLE_NS === $node->namespaceURI && 'table' === $node->localName;
+			$is_paragraph = $node instanceof DOMElement && self::ODF_TEXT_NS === $node->namespaceURI && 'p' === $node->localName;
+
+			if ( $is_table || $is_paragraph ) {
+				// Tables and paragraphs must be siblings, not children.
 				if ( $parent instanceof DOMNode ) {
 					$parent->insertBefore( $node, $next_sibling );
 				}
@@ -771,7 +1044,12 @@ class Documentate_OpenTBS {
 			// Use raw HTML for parsing, not the possibly-encoded key.
 			$nodes = self::build_odt_inline_nodes( $doc, $match_raw, $style_require );
 			foreach ( $nodes as $node ) {
-				if ( $node instanceof DOMElement && self::ODF_TABLE_NS === $node->namespaceURI && 'table' === $node->localName ) {
+				// Check if node is a block-level element that must be a sibling of paragraphs.
+				$is_table     = $node instanceof DOMElement && self::ODF_TABLE_NS === $node->namespaceURI && 'table' === $node->localName;
+				$is_paragraph = $node instanceof DOMElement && self::ODF_TEXT_NS === $node->namespaceURI && 'p' === $node->localName;
+
+				if ( $is_table || $is_paragraph ) {
+					// Tables and paragraphs must be siblings of the containing paragraph, not children.
 					$target_parent = $parent;
 					$reference     = $text_node;
 
@@ -970,13 +1248,35 @@ class Documentate_OpenTBS {
 				return self::collect_html_children_as_odt( $doc, $node, $formatting, $style_require, $list_state );
 			case 'p':
 			case 'div':
-				$children = self::collect_html_children_as_odt( $doc, $node, $formatting, $style_require, $list_state );
-				if ( empty( $children ) ) {
+				$alignment            = self::extract_text_alignment( $node );
+				$children             = self::collect_html_children_as_odt( $doc, $node, $formatting, $style_require, $list_state );
+				$is_spacing_paragraph = self::is_nbsp_only_paragraph( $node );
+
+				if ( empty( $children ) && ! $is_spacing_paragraph ) {
 					return array();
 				}
-				$result = $children;
-				$result[] = $doc->createElementNS( self::ODF_TEXT_NS, 'text:line-break' );
-				return $result;
+
+				// Always create a real ODT paragraph for proper spacing control.
+				$paragraph = $doc->createElementNS( self::ODF_TEXT_NS, 'text:p' );
+
+				// Apply alignment style if specified.
+				if ( null !== $alignment && 'left' !== $alignment ) {
+					$style_name = 'DocumentateAlign' . ucfirst( $alignment );
+					$paragraph->setAttributeNS( self::ODF_TEXT_NS, 'text:style-name', $style_name );
+					$style_require[ 'align_' . $alignment ] = true;
+				}
+
+				if ( ! empty( $children ) ) {
+					self::trim_odt_inline_nodes( $children );
+					foreach ( $children as $child_node ) {
+						$paragraph->appendChild( $child_node );
+					}
+				} elseif ( $is_spacing_paragraph ) {
+					// For spacing paragraphs, add a non-breaking space.
+					$paragraph->appendChild( $doc->createTextNode( "\xC2\xA0" ) );
+				}
+
+				return array( $paragraph );
 			case 'table':
 				return self::convert_table_node_to_odt( $doc, $node, $formatting, $style_require );
 			case 'ul':
@@ -1099,11 +1399,9 @@ class Documentate_OpenTBS {
 			$table_element->appendChild( $row_element );
 		}
 
-		return array(
-			$doc->createElementNS( self::ODF_TEXT_NS, 'text:line-break' ),
-			$table_element,
-			$doc->createElementNS( self::ODF_TEXT_NS, 'text:line-break' ),
-		);
+		// Tables in ODT are block-level elements that are siblings of paragraphs.
+		// No line-breaks needed - the XML structure provides natural separation.
+		return array( $table_element );
 	}
 
 	/**
@@ -1155,6 +1453,17 @@ class Documentate_OpenTBS {
 			$cell_formatting['bold'] = true;
 		}
 
+		// Extract alignment from cell or first paragraph child.
+		$alignment = self::extract_text_alignment( $cell );
+		if ( null === $alignment ) {
+			foreach ( $cell->childNodes as $child ) {
+				if ( $child instanceof DOMElement && 'p' === strtolower( $child->nodeName ) ) {
+					$alignment = self::extract_text_alignment( $child );
+					break;
+				}
+			}
+		}
+
 		$cell_element = $doc->createElementNS( self::ODF_TABLE_NS, 'table:table-cell' );
 		$cell_element->setAttributeNS( self::ODF_TABLE_NS, 'table:style-name', 'DocumentateRichTableCell' );
 		$style_require['table_cell'] = true;
@@ -1164,6 +1473,13 @@ class Documentate_OpenTBS {
 			'unordered' => 0,
 			'ordered'   => array(),
 		);
+
+		// Apply alignment style to paragraph.
+		if ( null !== $alignment && 'left' !== $alignment ) {
+			$style_name = 'DocumentateAlign' . ucfirst( $alignment );
+			$paragraph->setAttributeNS( self::ODF_TEXT_NS, 'text:style-name', $style_name );
+			$style_require[ 'align_' . $alignment ] = true;
+		}
 
 		$cell_nodes = self::collect_html_children_as_odt( $doc, $cell, $cell_formatting, $style_require, $cell_list_state );
 		if ( ! empty( $cell_nodes ) ) {
@@ -1460,18 +1776,56 @@ class Documentate_OpenTBS {
 					array(
 						'ns' => self::ODF_FO_NS,
 						'name' => 'fo:border',
-						'value' => '0.5pt solid #000000',
+						'value' => self::TABLE_BORDER,
 					),
 				),
 			),
-			'table_cell' => array(
+			'table_cell'    => array(
 				'name'   => 'DocumentateRichTableCell',
 				'family' => 'table-cell',
 				'props'  => array(
 					array(
-						'ns' => self::ODF_FO_NS,
-						'name' => 'fo:border',
-						'value' => '0.5pt solid #000000',
+						'ns'    => self::ODF_FO_NS,
+						'name'  => 'fo:border',
+						'value' => self::TABLE_BORDER,
+					),
+					array(
+						'ns'    => self::ODF_FO_NS,
+						'name'  => 'fo:padding',
+						'value' => self::TABLE_CELL_PADDING,
+					),
+				),
+			),
+			'align_center'  => array(
+				'name'   => 'DocumentateAlignCenter',
+				'family' => 'paragraph',
+				'props'  => array(
+					array(
+						'ns'    => self::ODF_FO_NS,
+						'name'  => 'fo:text-align',
+						'value' => 'center',
+					),
+				),
+			),
+			'align_right'   => array(
+				'name'   => 'DocumentateAlignRight',
+				'family' => 'paragraph',
+				'props'  => array(
+					array(
+						'ns'    => self::ODF_FO_NS,
+						'name'  => 'fo:text-align',
+						'value' => 'end',
+					),
+				),
+			),
+			'align_justify' => array(
+				'name'   => 'DocumentateAlignJustify',
+				'family' => 'paragraph',
+				'props'  => array(
+					array(
+						'ns'    => self::ODF_FO_NS,
+						'name'  => 'fo:text-align',
+						'value' => 'justify',
 					),
 				),
 			),
@@ -1496,6 +1850,8 @@ class Documentate_OpenTBS {
 				$props = $doc->createElementNS( self::ODF_STYLE_NS, 'style:table-properties' );
 			} elseif ( 'table-cell' === $info['family'] ) {
 				$props = $doc->createElementNS( self::ODF_STYLE_NS, 'style:table-cell-properties' );
+			} elseif ( 'paragraph' === $info['family'] ) {
+				$props = $doc->createElementNS( self::ODF_STYLE_NS, 'style:paragraph-properties' );
 			} else {
 				$props = $doc->createElementNS( self::ODF_STYLE_NS, 'style:text-properties' );
 			}
@@ -1649,6 +2005,14 @@ class Documentate_OpenTBS {
 						if ( ! empty( $list_paragraphs ) ) {
 							$result = array_merge( $result, $list_paragraphs );
 						}
+						break;
+					case 'p':
+					case 'div':
+						$has_block        = true;
+						$p_alignment      = self::extract_text_alignment( $node );
+						$paragraph_runs   = self::collect_runs_from_children( $doc, $node->childNodes, $base_rpr, $formatting, $relationships );
+						$block_paragraph  = self::create_paragraph_from_runs( $doc, $paragraph_runs, $base_rpr, $p_alignment );
+						$result[]         = $block_paragraph;
 						break;
 					default:
 						$has_block        = true;
@@ -1962,8 +2326,19 @@ class Documentate_OpenTBS {
 					$cell_formatting['bold'] = true;
 				}
 
+				// Extract alignment from cell or first paragraph child.
+				$cell_alignment = self::extract_text_alignment( $cell );
+				if ( null === $cell_alignment ) {
+					foreach ( $cell->childNodes as $child ) {
+						if ( $child instanceof DOMElement && 'p' === strtolower( $child->nodeName ) ) {
+							$cell_alignment = self::extract_text_alignment( $child );
+							break;
+						}
+					}
+				}
+
 				// Handle block elements (lists, nested tables) inside table cells.
-				$cell_content = self::convert_cell_content_to_docx( $doc, $cell->childNodes, $base_rpr, $cell_formatting, $relationships );
+				$cell_content = self::convert_cell_content_to_docx( $doc, $cell->childNodes, $base_rpr, $cell_formatting, $relationships, $cell_alignment );
 				foreach ( $cell_content as $content_node ) {
 					if ( $content_node instanceof DOMElement ) {
 						$tc->appendChild( $content_node );
@@ -2001,9 +2376,10 @@ class Documentate_OpenTBS {
 	 * @param DOMElement|null          $base_rpr      Base run properties.
 	 * @param array<string,bool>       $formatting    Formatting flags.
 	 * @param array<string,mixed>|null $relationships Relationships context.
+	 * @param string|null              $alignment     Cell alignment (left, center, right, justify).
 	 * @return array<int,DOMElement>   Array of paragraph elements.
 	 */
-	private static function convert_cell_content_to_docx( DOMDocument $doc, $children, $base_rpr, array $formatting, &$relationships ) {
+	private static function convert_cell_content_to_docx( DOMDocument $doc, $children, $base_rpr, array $formatting, &$relationships, $alignment = null ) {
 		$result       = array();
 		$current_runs = array();
 
@@ -2027,7 +2403,7 @@ class Documentate_OpenTBS {
 			if ( 'ul' === $tag || 'ol' === $tag ) {
 				// Flush any accumulated inline runs.
 				if ( ! empty( $current_runs ) ) {
-					$result[]     = self::create_paragraph_from_runs( $doc, $current_runs, $base_rpr );
+					$result[]     = self::create_paragraph_from_runs( $doc, $current_runs, $base_rpr, $alignment );
 					$current_runs = array();
 				}
 				// Convert list to paragraphs.
@@ -2039,7 +2415,7 @@ class Documentate_OpenTBS {
 			if ( 'table' === $tag ) {
 				// Flush any accumulated inline runs.
 				if ( ! empty( $current_runs ) ) {
-					$result[]     = self::create_paragraph_from_runs( $doc, $current_runs, $base_rpr );
+					$result[]     = self::create_paragraph_from_runs( $doc, $current_runs, $base_rpr, $alignment );
 					$current_runs = array();
 				}
 				// Convert nested table.
@@ -2053,12 +2429,17 @@ class Documentate_OpenTBS {
 			if ( 'p' === $tag || 'div' === $tag ) {
 				// Flush any accumulated inline runs.
 				if ( ! empty( $current_runs ) ) {
-					$result[]     = self::create_paragraph_from_runs( $doc, $current_runs, $base_rpr );
+					$result[]     = self::create_paragraph_from_runs( $doc, $current_runs, $base_rpr, $alignment );
 					$current_runs = array();
+				}
+				// Extract paragraph-specific alignment or use cell alignment.
+				$p_alignment = self::extract_text_alignment( $child );
+				if ( null === $p_alignment ) {
+					$p_alignment = $alignment;
 				}
 				// Convert paragraph content.
 				$p_runs   = self::collect_runs_from_children( $doc, $child->childNodes, $base_rpr, $formatting, $relationships );
-				$result[] = self::create_paragraph_from_runs( $doc, $p_runs, $base_rpr );
+				$result[] = self::create_paragraph_from_runs( $doc, $p_runs, $base_rpr, $p_alignment );
 				continue;
 			}
 
@@ -2068,7 +2449,7 @@ class Documentate_OpenTBS {
 
 		// Flush remaining inline runs.
 		if ( ! empty( $current_runs ) ) {
-			$result[] = self::create_paragraph_from_runs( $doc, $current_runs, $base_rpr );
+			$result[] = self::create_paragraph_from_runs( $doc, $current_runs, $base_rpr, $alignment );
 		}
 
 		return $result;
@@ -2077,13 +2458,26 @@ class Documentate_OpenTBS {
 	/**
 	 * Create a paragraph element from a list of runs/hyperlink nodes.
 	 *
-	 * @param DOMDocument           $doc      Target DOMDocument.
-	 * @param array<int,DOMElement> $runs     Runs to append.
-	 * @param DOMElement|null       $base_rpr Base run properties reference.
+	 * @param DOMDocument           $doc       Target DOMDocument.
+	 * @param array<int,DOMElement> $runs      Runs to append.
+	 * @param DOMElement|null       $base_rpr  Base run properties reference.
+	 * @param string|null           $alignment Text alignment (left, center, right, justify).
 	 * @return DOMElement
 	 */
-	private static function create_paragraph_from_runs( DOMDocument $doc, array $runs, $base_rpr ) {
+	private static function create_paragraph_from_runs( DOMDocument $doc, array $runs, $base_rpr, $alignment = null ) {
 		$paragraph = $doc->createElementNS( self::WORD_NAMESPACE, 'w:p' );
+
+		// Add paragraph properties with justification if alignment is specified.
+		if ( null !== $alignment && 'left' !== $alignment ) {
+			// phpcs:ignore WordPress.NamingConventions.ValidVariableName.VariableNotSnakeCase -- $pPr matches WordprocessingML spec.
+			$pPr = $doc->createElementNS( self::WORD_NAMESPACE, 'w:pPr' );
+			$jc  = $doc->createElementNS( self::WORD_NAMESPACE, 'w:jc' );
+			$jc->setAttribute( 'w:val', self::css_alignment_to_docx( $alignment ) );
+			// phpcs:ignore WordPress.NamingConventions.ValidVariableName.VariableNotSnakeCase -- $pPr matches WordprocessingML spec.
+			$pPr->appendChild( $jc );
+			// phpcs:ignore WordPress.NamingConventions.ValidVariableName.VariableNotSnakeCase -- $pPr matches WordprocessingML spec.
+			$paragraph->appendChild( $pPr );
+		}
 
 		if ( empty( $runs ) ) {
 			$paragraph->appendChild( self::create_blank_run( $doc, $base_rpr ) );
@@ -2096,7 +2490,15 @@ class Documentate_OpenTBS {
 			}
 		}
 
-		if ( 0 === $paragraph->childNodes->length ) {
+		// Check if paragraph only contains pPr (no actual content).
+		$has_content = false;
+		foreach ( $paragraph->childNodes as $child ) {
+			if ( $child instanceof DOMElement && 'w:pPr' !== $child->nodeName ) {
+				$has_content = true;
+				break;
+			}
+		}
+		if ( ! $has_content ) {
 			$paragraph->appendChild( self::create_blank_run( $doc, $base_rpr ) );
 		}
 
@@ -2186,6 +2588,73 @@ class Documentate_OpenTBS {
 	private static function with_format_flag( array $formatting, $flag, $value ) {
 		$formatting[ $flag ] = $value;
 		return $formatting;
+	}
+
+	/**
+	 * Extract text-align value from an element's style attribute.
+	 *
+	 * @param DOMElement $node Element to check for alignment.
+	 * @return string|null Alignment value (left, center, right, justify) or null.
+	 */
+	private static function extract_text_alignment( DOMElement $node ) {
+		$style = $node->getAttribute( 'style' );
+		if ( empty( $style ) ) {
+			return null;
+		}
+
+		if ( preg_match( '/text-align\s*:\s*(left|center|right|justify)/i', $style, $matches ) ) {
+			return strtolower( $matches[1] );
+		}
+
+		return null;
+	}
+
+	/**
+	 * Check if a paragraph node contains only non-breaking spaces.
+	 *
+	 * This detects intentional spacing paragraphs like <p>&nbsp;</p>.
+	 *
+	 * @param DOMNode $node The paragraph node to check.
+	 * @return bool True if the paragraph contains only nbsp characters.
+	 */
+	private static function is_nbsp_only_paragraph( DOMNode $node ) {
+		$text_content = '';
+		foreach ( $node->childNodes as $child ) {
+			if ( $child instanceof DOMText ) {
+				$text_content .= $child->wholeText;
+			} elseif ( $child instanceof DOMElement ) {
+				// If there are child elements (like <strong>), it's not a spacing-only paragraph.
+				return false;
+			}
+		}
+
+		// Decode HTML entities.
+		$decoded = html_entity_decode( $text_content, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+
+		// Check if it only contains non-breaking space characters (U+00A0).
+		$trimmed   = trim( $decoded );
+		$nbsp_only = preg_replace( '/[\x{00A0}]+/u', '', $trimmed );
+
+		return '' === $nbsp_only && '' !== $trimmed;
+	}
+
+	/**
+	 * Convert CSS text-align value to DOCX w:jc value.
+	 *
+	 * @param string $alignment CSS alignment value.
+	 * @return string DOCX justification value.
+	 */
+	private static function css_alignment_to_docx( $alignment ) {
+		switch ( $alignment ) {
+			case 'center':
+				return 'center';
+			case 'right':
+				return 'right';
+			case 'justify':
+				return 'both';
+			default:
+				return 'left';
+		}
 	}
 
 	/**

@@ -9,6 +9,7 @@
  */
 
 use Documentate\Documents\Documents_Meta_Handler;
+use Documentate\Document\Meta\Document_Meta;
 
 /**
  * Documentate document generator service.
@@ -266,11 +267,12 @@ class Documentate_Document_Generator {
 		$fields      = self::build_merge_fields( $post_id );
 		$rich_values = self::get_rich_field_values();
 		$path        = self::build_output_path( $post_id, $template_format );
+		$metadata    = Document_Meta::get( $post_id );
 
 		if ( 'docx' === $template_format ) {
-			$res = Documentate_OpenTBS::render_docx( $template_path, $fields, $path, $rich_values );
+			$res = Documentate_OpenTBS::render_docx( $template_path, $fields, $path, $rich_values, $metadata );
 		} else {
-			$res = Documentate_OpenTBS::render_odt( $template_path, $fields, $path, $rich_values );
+			$res = Documentate_OpenTBS::render_odt( $template_path, $fields, $path, $rich_values, $metadata );
 		}
 
 		if ( is_wp_error( $res ) ) {
@@ -299,9 +301,15 @@ class Documentate_Document_Generator {
 			$structured = Documentate_Documents::parse_structured_content( (string) $content );
 		}
 
+		// Apply case transformation to title based on schema attribute.
+		$title      = get_the_title( $post_id );
+		$title_case = self::get_title_case_from_schema( $post_id );
+		$title      = self::apply_case_transformation( $title, $title_case );
+
 		$fields = array(
-			'title'  => get_the_title( $post_id ),
-			'margen' => wp_strip_all_tags( isset( $opts['doc_margin_text'] ) ? $opts['doc_margin_text'] : '' ),
+			'title'      => $title,
+			'post_title' => $title, // Alias for templates using [post_title].
+			'margen'     => wp_strip_all_tags( isset( $opts['doc_margin_text'] ) ? $opts['doc_margin_text'] : '' ),
 		);
 
 		$types = wp_get_post_terms( $post_id, 'documentate_doc_type', array( 'fields' => 'ids' ) );
@@ -318,6 +326,11 @@ class Documentate_Document_Generator {
 						continue;
 				}
 					$slug     = sanitize_key( $def['slug'] );
+
+				// Skip post_title - it's already set from get_the_title() above.
+				if ( 'post_title' === $slug ) {
+					continue;
+				}
 					// Prefer the original template name for TinyButStrong merges when available.
 					$tbs_name = '';
 				if ( isset( $def['name'] ) && is_string( $def['name'] ) ) {
@@ -339,14 +352,19 @@ class Documentate_Document_Generator {
 					$type      = isset( $def['type'] ) ? sanitize_key( $def['type'] ) : 'textarea';
 
 				if ( 'array' === $type ) {
-						$items = self::get_array_field_items_for_merge( $structured, $slug, $post_id );
-						// Use block name for MergeBlock, with alias for legacy behavior.
-						$fields[ $tbs_name ] = $items;
+					$items = self::get_array_field_items_for_merge( $structured, $slug, $post_id );
+
+					// Apply case transformations to repeater items.
+					$item_schema = isset( $def['item_schema'] ) ? $def['item_schema'] : array();
+					$items       = self::apply_case_to_array_items( $items, $item_schema );
+
+					// Use block name for MergeBlock, with alias for legacy behavior.
+					$fields[ $tbs_name ] = $items;
 					if ( $alias_key !== $tbs_name ) {
 						$fields[ $alias_key ] = $items;
 					}
-						self::remember_rich_values_from_array_items( $items );
-						continue;
+					self::remember_rich_values_from_array_items( $items );
+					continue;
 				}
 
 					$value = self::get_structured_field_value( $structured, $slug, $post_id );
@@ -355,8 +373,15 @@ class Documentate_Document_Generator {
 				if ( ! in_array( $type, array( 'rich', 'html' ), true ) && Documents_Meta_Handler::value_contains_block_html( $value ) ) {
 					$type = 'rich';
 				}
-					$prepared               = self::prepare_field_value( $value, $type, $data_type );
-					$fields[ $tbs_name ]    = $prepared;
+					$prepared = self::prepare_field_value( $value, $type, $data_type, $def );
+
+				// Apply case transformation if specified (skip for HTML content).
+				$field_case = isset( $def['case'] ) ? sanitize_key( $def['case'] ) : '';
+				if ( '' !== $field_case && ! in_array( $type, array( 'rich', 'html' ), true ) ) {
+					$prepared = self::apply_case_transformation( $prepared, $field_case );
+				}
+
+				$fields[ $tbs_name ] = $prepared;
 				if ( $alias_key !== $tbs_name ) {
 					$fields[ $alias_key ] = $prepared;
 				}
@@ -614,21 +639,26 @@ class Documentate_Document_Generator {
 	 * @param string $value      Raw value retrieved from storage.
 	 * @param string $field_type Field UI type (single|textarea|rich|array).
 	 * @param string $data_type  Data type detected for the placeholder.
+	 * @param array  $field_def  Field definition with parameters (optional).
 	 * @return mixed
 	 */
-	private static function prepare_field_value( $value, $field_type, $data_type ) {
+	private static function prepare_field_value( $value, $field_type, $data_type, $field_def = array() ) {
 		$field_type = sanitize_key( $field_type );
 		$value      = is_string( $value ) ? $value : '';
 
 		if ( in_array( $field_type, array( 'rich', 'html' ), true ) ) {
-			return self::normalize_field_value( wp_kses_post( $value ), $data_type );
+			// Apply sanitization and cleanup only at generation time.
+			$sanitized = wp_kses_post( $value );
+			$sanitized = self::strip_unsupported_html_tags( $sanitized );
+			$sanitized = self::remove_linebreak_artifacts( $sanitized );
+			return self::normalize_field_value( $sanitized, $data_type, $field_def );
 		}
 
 		if ( '' === $value ) {
-			return self::normalize_field_value( '', $data_type );
+			return self::normalize_field_value( '', $data_type, $field_def );
 		}
 
-		return self::normalize_field_value( wp_strip_all_tags( $value ), $data_type );
+		return self::normalize_field_value( wp_strip_all_tags( $value ), $data_type, $field_def );
 	}
 
 	/**
@@ -647,11 +677,17 @@ class Documentate_Document_Generator {
 	 *
 	 * @param string $value     Original value.
 	 * @param string $data_type Detected data type.
+	 * @param array  $field_def Field definition with parameters (optional).
 	 * @return mixed
 	 */
-	private static function normalize_field_value( $value, $data_type ) {
+	private static function normalize_field_value( $value, $data_type, $field_def = array() ) {
 		$value     = is_string( $value ) ? trim( $value ) : $value;
 		$data_type = sanitize_key( $data_type );
+
+		if ( 'date' === $data_type ) {
+			$format = isset( $field_def['parameters']['format'] ) ? $field_def['parameters']['format'] : 'd/m/Y';
+			return self::normalize_date_value( $value, $format );
+		}
 
 		if ( isset( self::$type_normalizers[ $data_type ] ) ) {
 			return call_user_func( array( __CLASS__, self::$type_normalizers[ $data_type ] ), $value );
@@ -704,10 +740,11 @@ class Documentate_Document_Generator {
 	/**
 	 * Normalize a date value.
 	 *
-	 * @param mixed $value Original value.
+	 * @param mixed  $value  Original value.
+	 * @param string $format PHP date format string (default 'd/m/Y').
 	 * @return string Formatted date or original value.
 	 */
-	private static function normalize_date_value( $value ) {
+	private static function normalize_date_value( $value, $format = 'd/m/Y' ) {
 		if ( '' === $value ) {
 			return '';
 		}
@@ -715,6 +752,202 @@ class Documentate_Document_Generator {
 		if ( false === $timestamp ) {
 			return $value;
 		}
-		return wp_date( 'Y-m-d', $timestamp );
+		return wp_date( $format, $timestamp );
+	}
+
+	/**
+	 * Apply case transformation to a string value.
+	 *
+	 * @param string $value String to transform.
+	 * @param string $case  Case type: 'upper', 'lower', 'title', or empty for no change.
+	 * @return string Transformed string.
+	 */
+	private static function apply_case_transformation( $value, $case ) {
+		if ( ! is_string( $value ) || '' === $value || '' === $case ) {
+			return (string) $value;
+		}
+		$case = strtolower( trim( $case ) );
+		switch ( $case ) {
+			case 'upper':
+				return function_exists( 'mb_strtoupper' )
+					? mb_strtoupper( $value, 'UTF-8' )
+					: strtoupper( $value );
+			case 'lower':
+				return function_exists( 'mb_strtolower' )
+					? mb_strtolower( $value, 'UTF-8' )
+					: strtolower( $value );
+			case 'title':
+				return function_exists( 'mb_convert_case' )
+					? mb_convert_case( $value, MB_CASE_TITLE, 'UTF-8' )
+					: ucwords( strtolower( $value ) );
+		}
+		return $value;
+	}
+
+	/**
+	 * Get the case attribute for the title field from the document type schema.
+	 *
+	 * @param int $post_id Document post ID.
+	 * @return string Case value ('upper', 'lower', 'title') or empty string.
+	 */
+	private static function get_title_case_from_schema( $post_id ) {
+		$types = wp_get_post_terms( $post_id, 'documentate_doc_type', array( 'fields' => 'ids' ) );
+		if ( is_wp_error( $types ) || empty( $types ) ) {
+			return '';
+		}
+		$type_id = intval( $types[0] );
+		$schema  = class_exists( 'Documentate_Documents' )
+			? Documentate_Documents::get_term_schema( $type_id )
+			: self::get_type_schema( $type_id );
+		foreach ( $schema as $def ) {
+			$slug = isset( $def['slug'] ) ? sanitize_key( $def['slug'] ) : '';
+			if ( in_array( $slug, array( 'title', 'post_title' ), true ) ) {
+				return isset( $def['case'] ) ? sanitize_key( $def['case'] ) : '';
+			}
+		}
+		return '';
+	}
+
+	/**
+	 * Apply case transformations to array field items based on item schema.
+	 *
+	 * @param array $items       Array field items.
+	 * @param array $item_schema Item field schema with 'case' attributes.
+	 * @return array Transformed items.
+	 */
+	private static function apply_case_to_array_items( $items, $item_schema ) {
+		if ( empty( $items ) || ! is_array( $items ) || empty( $item_schema ) ) {
+			return $items;
+		}
+
+		foreach ( $items as $idx => $item ) {
+			if ( ! is_array( $item ) ) {
+				continue;
+			}
+			foreach ( $item as $key => $value ) {
+				if ( ! is_string( $value ) || '' === $value ) {
+					continue;
+				}
+				if ( isset( $item_schema[ $key ]['case'] ) ) {
+					$field_case = sanitize_key( $item_schema[ $key ]['case'] );
+					$field_type = isset( $item_schema[ $key ]['type'] ) ? $item_schema[ $key ]['type'] : '';
+					if ( ! in_array( $field_type, array( 'rich', 'html' ), true ) ) {
+						$items[ $idx ][ $key ] = self::apply_case_transformation( $value, $field_case );
+					}
+				}
+			}
+		}
+
+		return $items;
+	}
+
+	/**
+	 * Strip unsupported HTML tags and attributes from content before document generation.
+	 *
+	 * Removes tags that are not properly supported by OpenTBS/ODT/DOCX conversion.
+	 * Also removes id and class attributes which are not supported.
+	 * Inline styles (style attribute) are kept as they are supported.
+	 *
+	 * @param string $value HTML content.
+	 * @return string Content with unsupported tags and attributes removed.
+	 */
+	private static function strip_unsupported_html_tags( $value ) {
+		$value = is_string( $value ) ? $value : '';
+		if ( '' === $value ) {
+			return '';
+		}
+
+		// List of unsupported tags to remove (keeping their inner content).
+		$unsupported_tags = array(
+			'span',
+			'button',
+			'form',
+			'select',
+			'input',
+			'textarea',
+			'div',
+			'iframe',
+			'embed',
+			'object',
+			'label',
+			'font',
+			'img',
+			'video',
+			'audio',
+			'canvas',
+			'svg',
+			'script',
+			'style',
+			'noscript',
+			'map',
+			'area',
+			'applet',
+		);
+
+		foreach ( $unsupported_tags as $tag ) {
+			// Remove opening tags (with or without attributes).
+			$value = preg_replace( '#<' . $tag . '\b[^>]*>#i', '', $value );
+			if ( ! is_string( $value ) ) {
+				$value = '';
+			}
+			// Remove closing tags.
+			$value = preg_replace( '#</' . $tag . '>#i', '', $value );
+			if ( ! is_string( $value ) ) {
+				$value = '';
+			}
+		}
+
+		// Remove id and class attributes (not supported by OpenTBS).
+		$value = preg_replace( '/\s+id\s*=\s*["\'][^"\']*["\']/i', '', $value );
+		if ( ! is_string( $value ) ) {
+			$value = '';
+		}
+		$value = preg_replace( '/\s+class\s*=\s*["\'][^"\']*["\']/i', '', $value );
+		if ( ! is_string( $value ) ) {
+			$value = '';
+		}
+
+		return $value;
+	}
+
+	/**
+	 * Remove newline artifacts from HTML content for document generation.
+	 *
+	 * Cleans up stray newline markers and empty paragraphs that can interfere
+	 * with proper document formatting.
+	 *
+	 * @param string $value Sanitized HTML.
+	 * @return string
+	 */
+	private static function remove_linebreak_artifacts( $value ) {
+		$value = (string) $value;
+
+		// 1) Remove paragraphs that contain stray literal newline markers (n or rn).
+		// Only removes if at least one marker is present - preserves intentional <p>&nbsp;</p> spacing.
+		// NOTE: Do NOT use case-insensitive flag to avoid matching "N" in words like "Numbered".
+		$value = preg_replace( '#<p(?:[^>]*)>(?:\s)*(?:rn|n)+(?:\s)*</p>#', '', $value );
+		if ( ! is_string( $value ) ) {
+			$value = '';
+		}
+
+		// 2) Remove standalone markers between any two tags: >  n  <  => ><.
+		$value = preg_replace( '#>(?:\s|&nbsp;)*(?:rn|n)+(?:\s|&nbsp;)*<#', '><', $value );
+		if ( ! is_string( $value ) ) {
+			$value = '';
+		}
+
+		// 3) Remove markers right after opening block/list/table tags.
+		$value = preg_replace( '#(<(?:ul|ol|table|thead|tbody|tfoot|tr|td|th|li)[^>]*>)(?:\s|&nbsp;)*(?:rn|n)+#', '$1', $value );
+		if ( ! is_string( $value ) ) {
+			$value = '';
+		}
+
+		// 4) Remove markers right before closing block/list/table tags.
+		$value = preg_replace( '#(?:\s|&nbsp;)*(?:rn|n)+(?:\s|&nbsp;)*(</(?:ul|ol|table|thead|tbody|tfoot|tr|td|th|li)>)#', '$1', $value );
+		if ( ! is_string( $value ) ) {
+			$value = '';
+		}
+
+		return $value;
 	}
 }

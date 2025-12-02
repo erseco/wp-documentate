@@ -114,7 +114,7 @@ add_action( 'init', 'documentate_maybe_flush_rewrite_rules', 999 );
  * Looks for the file under plugin fixtures directory and root as fallback.
  * Uses file hash to avoid duplicate imports and tags attachment as plugin fixture.
  *
- * @param string $filename Filename inside fixtures/ (e.g., 'plantilla.odt').
+ * @param string $filename Filename inside fixtures/ (e.g., 'resolucion.odt').
  * @return int Attachment ID or 0 on failure/missing file.
  */
 function documentate_import_fixture_file( $filename ) {
@@ -197,14 +197,15 @@ function documentate_import_fixture_file( $filename ) {
  */
 function documentate_ensure_default_media() {
 
-	// ODT template.
-	documentate_import_fixture_file( 'plantilla.odt' );
-	// DOCX template.
-	documentate_import_fixture_file( 'plantilla.docx' );
+	// ODT template for resolutions.
+	documentate_import_fixture_file( 'resolucion.odt' );
 
 	// Ensure demo fixtures are present for testing scenarios.
 	documentate_import_fixture_file( 'demo-wp-documentate.odt' );
 	documentate_import_fixture_file( 'demo-wp-documentate.docx' );
+	documentate_import_fixture_file( 'autorizacionviaje.odt' );
+	documentate_import_fixture_file( 'gastossuplidos.odt' );
+	documentate_import_fixture_file( 'propuestagasto.odt' );
 }
 
 /**
@@ -223,27 +224,15 @@ function documentate_maybe_seed_default_doc_types() {
 
 	$definitions = array();
 
-	$odt_id = documentate_import_fixture_file( 'plantilla.odt' );
+	$odt_id = documentate_import_fixture_file( 'resolucion.odt' );
 	if ( $odt_id > 0 ) {
 		$definitions[] = array(
-			'slug'        => 'documentate-demo-odt',
-			'name'        => __( 'Test document type (ODT)', 'documentate' ),
-			'description' => __( 'Example automatically created with the included ODT template.', 'documentate' ),
+			'slug'        => 'resolucion-administrativa',
+			'name'        => 'Resolución Administrativa',
+			'description' => 'Plantilla para resoluciones administrativas con antecedentes, fundamentos de derecho, resuelvo y anexos.',
 			'color'       => '#37517e',
 			'template_id' => $odt_id,
-			'fixture_key' => 'documentate-demo-odt',
-		);
-	}
-
-	$docx_id = documentate_import_fixture_file( 'plantilla.docx' );
-	if ( $docx_id > 0 ) {
-		$definitions[] = array(
-			'slug'        => 'documentate-demo-docx',
-			'name'        => __( 'Test document type (DOCX)', 'documentate' ),
-			'description' => __( 'Example automatically created with the included DOCX template.', 'documentate' ),
-			'color'       => '#2a7fb8',
-			'template_id' => $docx_id,
-			'fixture_key' => 'documentate-demo-docx',
+			'fixture_key' => 'resolucion-administrativa',
 		);
 	}
 
@@ -268,6 +257,42 @@ function documentate_maybe_seed_default_doc_types() {
 			'color'       => '#0f9d58',
 			'template_id' => $advanced_docx_id,
 			'fixture_key' => 'documentate-demo-wp-documentate-docx',
+		);
+	}
+
+	$autorizacion_id = documentate_import_fixture_file( 'autorizacionviaje.odt' );
+	if ( $autorizacion_id > 0 ) {
+		$definitions[] = array(
+			'slug'        => 'autorizacion-viaje',
+			'name'        => 'Autorización de viaje',
+			'description' => 'Plantilla para autorizaciones de viaje con listado de asistentes.',
+			'color'       => '#e67e22',
+			'template_id' => $autorizacion_id,
+			'fixture_key' => 'autorizacion-viaje',
+		);
+	}
+
+	$gastos_id = documentate_import_fixture_file( 'gastossuplidos.odt' );
+	if ( $gastos_id > 0 ) {
+		$definitions[] = array(
+			'slug'        => 'gastos-suplidos',
+			'name'        => 'Solicitud de gastos suplidos',
+			'description' => 'Plantilla para solicitud de reembolso de gastos con listado de facturas.',
+			'color'       => '#27ae60',
+			'template_id' => $gastos_id,
+			'fixture_key' => 'gastos-suplidos',
+		);
+	}
+
+	$propuesta_id = documentate_import_fixture_file( 'propuestagasto.odt' );
+	if ( $propuesta_id > 0 ) {
+		$definitions[] = array(
+			'slug'        => 'propuesta-gasto',
+			'name'        => 'Propuesta de gasto',
+			'description' => 'Plantilla para propuestas de gasto con libramientos, servicios, suministros y expertos.',
+			'color'       => '#9b59b6',
+			'template_id' => $propuesta_id,
+			'fixture_key' => 'propuesta-gasto',
 		);
 	}
 
@@ -367,27 +392,746 @@ function documentate_maybe_seed_demo_documents() {
 
 	documentate_maybe_seed_default_doc_types();
 
+	// Get the Resolución Administrativa document type.
+	$term = get_term_by( 'slug', 'resolucion-administrativa', 'documentate_doc_type' );
+	if ( $term instanceof WP_Term ) {
+		// Create the 3 specific demo documents for Resolución Administrativa.
+		documentate_create_resolucion_demo_documents( $term );
+	}
+
+	// Create specific demo document for Autorización de viaje.
+	$autorizacion_term = get_term_by( 'slug', 'autorizacion-viaje', 'documentate_doc_type' );
+	if ( $autorizacion_term instanceof WP_Term ) {
+		documentate_create_specific_demo_documents( $autorizacion_term, documentate_get_autorizacion_viaje_demo() );
+	}
+
+	// Create specific demo document for Gastos suplidos.
+	$gastos_term = get_term_by( 'slug', 'gastos-suplidos', 'documentate_doc_type' );
+	if ( $gastos_term instanceof WP_Term ) {
+		documentate_create_specific_demo_documents( $gastos_term, documentate_get_gastos_suplidos_demo() );
+	}
+
+	// Create specific demo document for Propuesta de gasto.
+	$propuesta_term = get_term_by( 'slug', 'propuesta-gasto', 'documentate_doc_type' );
+	if ( $propuesta_term instanceof WP_Term ) {
+		documentate_create_specific_demo_documents( $propuesta_term, documentate_get_propuesta_gasto_demo() );
+	}
+
+	// Also create demo documents for other document types (advanced demos).
+	$exclude_ids = array();
+	if ( $term instanceof WP_Term ) {
+		$exclude_ids[] = $term->term_id;
+	}
+	if ( $autorizacion_term instanceof WP_Term ) {
+		$exclude_ids[] = $autorizacion_term->term_id;
+	}
+	if ( $gastos_term instanceof WP_Term ) {
+		$exclude_ids[] = $gastos_term->term_id;
+	}
+	if ( $propuesta_term instanceof WP_Term ) {
+		$exclude_ids[] = $propuesta_term->term_id;
+	}
+
 	$terms = get_terms(
 		array(
 			'taxonomy'   => 'documentate_doc_type',
 			'hide_empty' => false,
+			'exclude'    => $exclude_ids,
 		)
 	);
 
-	if ( is_wp_error( $terms ) || empty( $terms ) ) {
-		delete_option( 'documentate_seed_demo_documents' );
-		return;
-	}
-
-	foreach ( $terms as $term ) {
-		if ( documentate_demo_document_exists( $term->term_id ) ) {
-			continue;
+	if ( ! is_wp_error( $terms ) && ! empty( $terms ) ) {
+		foreach ( $terms as $other_term ) {
+			if ( documentate_demo_document_exists( $other_term->term_id ) ) {
+				continue;
+			}
+			documentate_create_demo_document_for_type( $other_term );
 		}
-
-		documentate_create_demo_document_for_type( $term );
 	}
 
 	delete_option( 'documentate_seed_demo_documents' );
+}
+
+/**
+ * Create the 3 specific demo documents for the Resolución Administrativa type.
+ *
+ * @param WP_Term $term Document type term.
+ * @return void
+ */
+function documentate_create_resolucion_demo_documents( $term ) {
+	if ( ! $term instanceof WP_Term ) {
+		return;
+	}
+
+	$term_id = absint( $term->term_id );
+	if ( $term_id <= 0 ) {
+		return;
+	}
+
+	$demo_documents = documentate_get_resolucion_demo_data();
+
+	foreach ( $demo_documents as $demo_key => $demo_data ) {
+		// Check if this specific demo document already exists.
+		$existing = get_posts(
+			array(
+				'post_type'      => 'documentate_document',
+				'post_status'    => 'any',
+				'posts_per_page' => 1,
+				'fields'         => 'ids',
+				'meta_key'       => '_documentate_demo_key',
+				'meta_value'     => $demo_key,
+			)
+		);
+
+		if ( ! empty( $existing ) ) {
+			continue;
+		}
+
+		$post_id = wp_insert_post(
+			array(
+				'post_type'    => 'documentate_document',
+				'post_title'   => $demo_data['title'],
+				'post_status'  => 'private',
+				'post_content' => '',
+				'post_author'  => get_current_user_id(),
+			),
+			true
+		);
+
+		if ( is_wp_error( $post_id ) || 0 === $post_id ) {
+			continue;
+		}
+
+		wp_set_post_terms( $post_id, array( $term_id ), 'documentate_doc_type', false );
+
+		// Save field values.
+		$structured_fields = array();
+		foreach ( $demo_data['fields'] as $slug => $field_data ) {
+			$value = $field_data['value'];
+			$type  = $field_data['type'];
+
+			if ( 'array' === $type ) {
+				$encoded = wp_json_encode( $value, JSON_UNESCAPED_UNICODE );
+				update_post_meta( $post_id, 'documentate_field_' . $slug, $encoded );
+				$structured_fields[ $slug ] = array(
+					'type'  => 'array',
+					'value' => $encoded,
+				);
+			} else {
+				if ( 'rich' === $type ) {
+					$value = wp_kses_post( $value );
+				} elseif ( 'single' === $type ) {
+					$value = sanitize_text_field( $value );
+				} else {
+					$value = sanitize_textarea_field( $value );
+				}
+				update_post_meta( $post_id, 'documentate_field_' . $slug, $value );
+				$structured_fields[ $slug ] = array(
+					'type'  => $type,
+					'value' => $value,
+				);
+			}
+		}
+
+		update_post_meta( $post_id, '_documentate_demo_type_id', (string) $term_id );
+		update_post_meta( $post_id, '_documentate_demo_key', $demo_key );
+		update_post_meta( $post_id, \Documentate\Document\Meta\Document_Meta_Box::META_KEY_SUBJECT, sanitize_text_field( $demo_data['title'] ) );
+		update_post_meta( $post_id, \Documentate\Document\Meta\Document_Meta_Box::META_KEY_AUTHOR, sanitize_text_field( $demo_data['author'] ) );
+		update_post_meta( $post_id, \Documentate\Document\Meta\Document_Meta_Box::META_KEY_KEYWORDS, sanitize_text_field( $demo_data['keywords'] ) );
+
+		$content = documentate_build_structured_demo_content( $structured_fields );
+		if ( '' !== $content ) {
+			wp_update_post(
+				array(
+					'ID'           => $post_id,
+					'post_content' => $content,
+				)
+			);
+		}
+	}
+}
+
+/**
+ * Create specific demo documents for a document type using provided data.
+ *
+ * @param WP_Term $term       Document type term.
+ * @param array   $demo_data  Array of demo documents keyed by demo_key.
+ * @return void
+ */
+function documentate_create_specific_demo_documents( $term, $demo_data ) {
+	if ( ! $term instanceof WP_Term ) {
+		return;
+	}
+
+	$term_id = absint( $term->term_id );
+	if ( $term_id <= 0 || empty( $demo_data ) ) {
+		return;
+	}
+
+	foreach ( $demo_data as $demo_key => $data ) {
+		// Check if this specific demo document already exists.
+		$existing = get_posts(
+			array(
+				'post_type'      => 'documentate_document',
+				'post_status'    => 'any',
+				'posts_per_page' => 1,
+				'fields'         => 'ids',
+				'meta_key'       => '_documentate_demo_key',
+				'meta_value'     => $demo_key,
+			)
+		);
+
+		if ( ! empty( $existing ) ) {
+			continue;
+		}
+
+		$post_id = wp_insert_post(
+			array(
+				'post_type'    => 'documentate_document',
+				'post_title'   => $data['title'],
+				'post_status'  => 'private',
+				'post_content' => '',
+				'post_author'  => get_current_user_id(),
+			),
+			true
+		);
+
+		if ( is_wp_error( $post_id ) || 0 === $post_id ) {
+			continue;
+		}
+
+		wp_set_post_terms( $post_id, array( $term_id ), 'documentate_doc_type', false );
+
+		// Save field values.
+		$structured_fields = array();
+		foreach ( $data['fields'] as $slug => $field_data ) {
+			$value = $field_data['value'];
+			$type  = $field_data['type'];
+
+			if ( 'array' === $type ) {
+				$encoded = wp_json_encode( $value, JSON_UNESCAPED_UNICODE );
+				update_post_meta( $post_id, 'documentate_field_' . $slug, $encoded );
+				$structured_fields[ $slug ] = array(
+					'type'  => 'array',
+					'value' => $encoded,
+				);
+			} else {
+				if ( 'rich' === $type ) {
+					$value = wp_kses_post( $value );
+				} elseif ( 'single' === $type ) {
+					$value = sanitize_text_field( $value );
+				} else {
+					$value = sanitize_textarea_field( $value );
+				}
+				update_post_meta( $post_id, 'documentate_field_' . $slug, $value );
+				$structured_fields[ $slug ] = array(
+					'type'  => $type,
+					'value' => $value,
+				);
+			}
+		}
+
+		update_post_meta( $post_id, '_documentate_demo_type_id', (string) $term_id );
+		update_post_meta( $post_id, '_documentate_demo_key', $demo_key );
+		update_post_meta( $post_id, \Documentate\Document\Meta\Document_Meta_Box::META_KEY_SUBJECT, sanitize_text_field( $data['title'] ) );
+		update_post_meta( $post_id, \Documentate\Document\Meta\Document_Meta_Box::META_KEY_AUTHOR, sanitize_text_field( $data['author'] ) );
+		update_post_meta( $post_id, \Documentate\Document\Meta\Document_Meta_Box::META_KEY_KEYWORDS, sanitize_text_field( $data['keywords'] ) );
+
+		$content = documentate_build_structured_demo_content( $structured_fields );
+		if ( '' !== $content ) {
+			wp_update_post(
+				array(
+					'ID'           => $post_id,
+					'post_content' => $content,
+				)
+			);
+		}
+	}
+}
+
+/**
+ * Get demo data for the 3 specific resolution documents.
+ *
+ * @return array
+ */
+function documentate_get_resolucion_demo_data() {
+	return array(
+		'resolucion-prueba'          => documentate_get_resolucion_prueba_demo(),
+		'listado-provisional-prueba' => documentate_get_listado_provisional_demo(),
+		'listado-definitivo-prueba'  => documentate_get_listado_definitivo_demo(),
+	);
+}
+
+/**
+ * Get demo data for "Resolución de prueba".
+ *
+ * @return array
+ */
+function documentate_get_resolucion_prueba_demo() {
+	return array(
+		'title'    => 'Resolución de prueba',
+		'author'   => 'Dirección General de Ordenación, Innovación y Calidad',
+		'keywords' => 'resolución, convocatoria, bases, prueba',
+		'fields'   => array(
+			'objeto'       => array(
+				'type'  => 'textarea',
+				'value' => 'Aprobación de las bases reguladoras y convocatoria del programa piloto de innovación educativa para el curso 2025-2026.',
+			),
+			'antecedentes' => array(
+				'type'  => 'rich',
+				'value' => '<p><strong>Primero.</strong> El Decreto 114/2011, de 11 de mayo, por el que se regula la convocatoria, reconocimiento, certificación y registro de las actividades de formación permanente del profesorado.</p>
+<p><strong>Segundo.</strong> La Orden de 9 de octubre de 2013, por la que se desarrolla el Decreto 81/2010, de 8 de julio, por el que se aprueba el Reglamento Orgánico de los centros docentes públicos no universitarios de la Comunidad Autónoma de Canarias.</p>
+<p><strong>Tercero.</strong> Se hace necesario impulsar programas que fomenten la innovación educativa en los centros docentes públicos de la Comunidad Autónoma de Canarias, con el fin de mejorar la calidad de la enseñanza.</p>',
+			),
+			'fundamentos'  => array(
+				'type'  => 'rich',
+				'value' => '<p><strong>Primero.</strong> La Ley Orgánica 2/2006, de 3 de mayo, de Educación, modificada por la Ley Orgánica 3/2020, de 29 de diciembre, establece en su artículo 102 que la formación permanente constituye un derecho y una obligación de todo el profesorado.</p>
+<p><strong>Segundo.</strong> El artículo 132 del Estatuto de Autonomía de Canarias, aprobado por Ley Orgánica 1/2018, de 5 de noviembre, atribuye a la Comunidad Autónoma la competencia de desarrollo legislativo y ejecución en materia de educación.</p>
+<p><strong>Tercero.</strong> En virtud de las competencias atribuidas por el Decreto 84/2024, de 10 de julio, por el que se aprueba la estructura orgánica de la Consejería de Educación, Formación Profesional, Actividad Física y Deportes.</p>',
+			),
+			'resuelvo'     => array(
+				'type'  => 'rich',
+				'value' => '<p><strong>Primero.</strong> Aprobar las bases reguladoras del programa piloto de innovación educativa para el curso 2025-2026, que se recogen en el Anexo I de la presente resolución.</p>
+<p><strong>Segundo.</strong> Convocar la participación de los centros docentes públicos no universitarios de la Comunidad Autónoma de Canarias en el citado programa.</p>
+<p><strong>Tercero.</strong> El plazo de presentación de solicitudes será de 15 días hábiles contados a partir del día siguiente al de la publicación de esta resolución.</p>
+<p><strong>Cuarto.</strong> Contra la presente resolución, que no pone fin a la vía administrativa, cabe interponer recurso de alzada ante la Viceconsejería de Educación en el plazo de un mes.</p>',
+			),
+			'anexos'       => array(
+				'type'  => 'array',
+				'value' => array(
+					array(
+						'code'    => 'Anexo I',
+						'title'   => 'BASES REGULADORAS DEL PROGRAMA',
+						'summary' => '<p><strong>1. Objeto y finalidad.</strong> El presente programa tiene como finalidad promover la innovación educativa en los centros docentes públicos.</p>
+<p><strong>2. Destinatarios.</strong> Podrán participar los centros docentes públicos no universitarios dependientes de la Consejería de Educación.</p>
+<p><strong>3. Requisitos.</strong> Los centros participantes deberán contar con la aprobación del Consejo Escolar y disponer de los recursos necesarios.</p>',
+					),
+				),
+			),
+		),
+	);
+}
+
+/**
+ * Get demo data for "Listado provisional de prueba".
+ *
+ * @return array
+ */
+function documentate_get_listado_provisional_demo() {
+	return array(
+		'title'    => 'Listado provisional de prueba',
+		'author'   => 'Dirección General de Ordenación, Innovación y Calidad',
+		'keywords' => 'listado, provisional, admitidos, centros',
+		'fields'   => array(
+			'objeto'       => array(
+				'type'  => 'textarea',
+				'value' => 'Publicación del listado provisional de centros admitidos y excluidos en el programa piloto de innovación educativa para el curso 2025-2026.',
+			),
+			'antecedentes' => array(
+				'type'  => 'rich',
+				'value' => '<p><strong>Primero.</strong> Por Resolución de fecha 15 de septiembre de 2025, se aprobaron las bases reguladoras y se convocó la participación en el programa piloto de innovación educativa para el curso 2025-2026.</p>
+<p><strong>Segundo.</strong> Finalizado el plazo de presentación de solicitudes, se ha procedido a la revisión y baremación de las mismas por la comisión de selección.</p>
+<p><strong>Tercero.</strong> De conformidad con lo establecido en la base séptima de la convocatoria, procede la publicación del listado provisional de centros admitidos y excluidos.</p>',
+			),
+			'fundamentos'  => array(
+				'type'  => 'rich',
+				'value' => '<p><strong>Primero.</strong> La base séptima de la Resolución de 15 de septiembre de 2025 establece que, una vez finalizado el plazo de presentación de solicitudes, se publicará el listado provisional.</p>
+<p><strong>Segundo.</strong> La Ley 39/2015, de 1 de octubre, del Procedimiento Administrativo Común de las Administraciones Públicas, establece en su artículo 45 los requisitos de publicación de actos administrativos.</p>
+<p><strong>Tercero.</strong> En virtud de las competencias atribuidas por el Decreto 84/2024, de 10 de julio.</p>',
+			),
+			'resuelvo'     => array(
+				'type'  => 'rich',
+				'value' => '<p><strong>Primero.</strong> Publicar el listado provisional de centros admitidos en el programa piloto de innovación educativa, que figura en el Anexo I de la presente resolución.</p>
+<p><strong>Segundo.</strong> Publicar el listado provisional de centros excluidos, con indicación de las causas de exclusión, que figura en el Anexo II.</p>
+<p><strong>Tercero.</strong> Abrir un plazo de 10 días hábiles para la presentación de alegaciones, contados a partir del día siguiente al de la publicación de esta resolución.</p>
+<p><strong>Cuarto.</strong> Las alegaciones deberán presentarse a través de la sede electrónica del Gobierno de Canarias.</p>',
+			),
+			'anexos'       => array(
+				'type'  => 'array',
+				'value' => array(
+					array(
+						'code'    => 'Anexo I',
+						'title'   => 'LISTADO PROVISIONAL DE CENTROS ADMITIDOS',
+						'summary' => '<table><thead><tr><th>Código</th><th>Centro</th><th>Isla</th><th>Puntuación</th></tr></thead><tbody>
+<tr><td>35001234</td><td>CEIP Ejemplo Uno</td><td>Gran Canaria</td><td>85</td></tr>
+<tr><td>38002345</td><td>IES Ejemplo Dos</td><td>Tenerife</td><td>82</td></tr>
+<tr><td>35003456</td><td>CEO Ejemplo Tres</td><td>Lanzarote</td><td>78</td></tr>
+<tr><td>38004567</td><td>CEIP Ejemplo Cuatro</td><td>La Palma</td><td>75</td></tr>
+</tbody></table>',
+					),
+					array(
+						'code'    => 'Anexo II',
+						'title'   => 'LISTADO PROVISIONAL DE CENTROS EXCLUIDOS',
+						'summary' => '<table><thead><tr><th>Código</th><th>Centro</th><th>Causa de exclusión</th></tr></thead><tbody>
+<tr><td>35005678</td><td>CEIP Ejemplo Cinco</td><td>No aporta acta del Consejo Escolar</td></tr>
+<tr><td>38006789</td><td>IES Ejemplo Seis</td><td>Solicitud fuera de plazo</td></tr>
+</tbody></table>',
+					),
+				),
+			),
+		),
+	);
+}
+
+/**
+ * Get demo data for "Listado definitivo de prueba".
+ *
+ * @return array
+ */
+function documentate_get_listado_definitivo_demo() {
+	return array(
+		'title'    => 'Listado definitivo de prueba',
+		'author'   => 'Dirección General de Ordenación, Innovación y Calidad',
+		'keywords' => 'listado, definitivo, admitidos, centros',
+		'fields'   => array(
+			'objeto'       => array(
+				'type'  => 'textarea',
+				'value' => 'Publicación del listado definitivo de centros admitidos y excluidos en el programa piloto de innovación educativa para el curso 2025-2026.',
+			),
+			'antecedentes' => array(
+				'type'  => 'rich',
+				'value' => '<p><strong>Primero.</strong> Por Resolución de fecha 15 de septiembre de 2025, se aprobaron las bases reguladoras y se convocó la participación en el programa piloto de innovación educativa para el curso 2025-2026.</p>
+<p><strong>Segundo.</strong> Por Resolución de fecha 20 de octubre de 2025, se publicó el listado provisional de centros admitidos y excluidos, abriéndose un plazo de alegaciones.</p>
+<p><strong>Tercero.</strong> Finalizado el plazo de alegaciones y estudiadas las mismas por la comisión de selección, procede la publicación del listado definitivo.</p>
+<p><strong>Cuarto.</strong> Se han estimado las alegaciones presentadas por el CEIP Ejemplo Cinco, al subsanar la documentación requerida.</p>',
+			),
+			'fundamentos'  => array(
+				'type'  => 'rich',
+				'value' => '<p><strong>Primero.</strong> La base octava de la Resolución de 15 de septiembre de 2025 establece que, una vez resueltas las alegaciones, se publicará el listado definitivo.</p>
+<p><strong>Segundo.</strong> La Ley 39/2015, de 1 de octubre, del Procedimiento Administrativo Común de las Administraciones Públicas.</p>
+<p><strong>Tercero.</strong> En virtud de las competencias atribuidas por el Decreto 84/2024, de 10 de julio.</p>',
+			),
+			'resuelvo'     => array(
+				'type'  => 'rich',
+				'value' => '<p><strong>Primero.</strong> Publicar el listado definitivo de centros admitidos en el programa piloto de innovación educativa, que figura en el Anexo I de la presente resolución.</p>
+<p><strong>Segundo.</strong> Publicar el listado definitivo de centros excluidos, con indicación de las causas de exclusión, que figura en el Anexo II.</p>
+<p><strong>Tercero.</strong> Contra la presente resolución, que no pone fin a la vía administrativa, cabe interponer recurso de alzada ante la Viceconsejería de Educación en el plazo de un mes.</p>',
+			),
+			'anexos'       => array(
+				'type'  => 'array',
+				'value' => array(
+					array(
+						'code'    => 'Anexo I',
+						'title'   => 'LISTADO DEFINITIVO DE CENTROS ADMITIDOS',
+						'summary' => '<table><thead><tr><th>Código</th><th>Centro</th><th>Isla</th><th>Puntuación</th></tr></thead><tbody>
+<tr><td>35001234</td><td>CEIP Ejemplo Uno</td><td>Gran Canaria</td><td>85</td></tr>
+<tr><td>38002345</td><td>IES Ejemplo Dos</td><td>Tenerife</td><td>82</td></tr>
+<tr><td>35003456</td><td>CEO Ejemplo Tres</td><td>Lanzarote</td><td>78</td></tr>
+<tr><td>38004567</td><td>CEIP Ejemplo Cuatro</td><td>La Palma</td><td>75</td></tr>
+<tr><td>35005678</td><td>CEIP Ejemplo Cinco</td><td>Gran Canaria</td><td>72</td></tr>
+</tbody></table>',
+					),
+					array(
+						'code'    => 'Anexo II',
+						'title'   => 'LISTADO DEFINITIVO DE CENTROS EXCLUIDOS',
+						'summary' => '<table><thead><tr><th>Código</th><th>Centro</th><th>Causa de exclusión</th></tr></thead><tbody>
+<tr><td>38006789</td><td>IES Ejemplo Seis</td><td>Solicitud fuera de plazo (no subsanable)</td></tr>
+</tbody></table>',
+					),
+				),
+			),
+		),
+	);
+}
+
+/**
+ * Get demo data for "Autorización de viaje".
+ *
+ * @return array
+ */
+function documentate_get_autorizacion_viaje_demo() {
+	return array(
+		'autorizacion-viaje-prueba' => array(
+			'title'    => 'Autorización de viaje a Madrid',
+			'author'   => 'Dirección General de Personal',
+			'keywords' => 'viaje, autorización, comisión de servicios',
+			'fields'   => array(
+				'lugar'               => array(
+					'type'  => 'single',
+					'value' => 'Madrid',
+				),
+				'fecha_evento_inicio' => array(
+					'type'  => 'single',
+					'value' => '2025-03-10',
+				),
+				'fecha_evento_fin'    => array(
+					'type'  => 'single',
+					'value' => '2025-03-12',
+				),
+				'invitante'           => array(
+					'type'  => 'single',
+					'value' => 'Ministerio de Educación, Formación Profesional y Deportes',
+				),
+				'temas'               => array(
+					'type'  => 'textarea',
+					'value' => 'Reunión de coordinación interterritorial sobre programas de innovación educativa y formación del profesorado para el curso 2025-2026.',
+				),
+				'pagador'             => array(
+					'type'  => 'single',
+					'value' => 'Consejería de Educación, Formación Profesional, Actividad Física y Deportes del Gobierno de Canarias',
+				),
+				'asistentes'          => array(
+					'type'  => 'array',
+					'value' => array(
+						array(
+							'apellido1' => 'García',
+							'apellido2' => 'Hernández',
+							'nombre'    => 'María del Carmen',
+						),
+						array(
+							'apellido1' => 'Rodríguez',
+							'apellido2' => 'Pérez',
+							'nombre'    => 'Juan Antonio',
+						),
+					),
+				),
+			),
+		),
+	);
+}
+
+/**
+ * Get demo data for "Solicitud de gastos suplidos".
+ *
+ * @return array
+ */
+function documentate_get_gastos_suplidos_demo() {
+	return array(
+		'gastos-suplidos-prueba' => array(
+			'title'    => 'Solicitud de reembolso de gastos de viaje',
+			'author'   => 'Servicio de Gestión Económica',
+			'keywords' => 'gastos, suplidos, reembolso, facturas',
+			'fields'   => array(
+				'nombre_completo' => array(
+					'type'  => 'single',
+					'value' => 'María del Carmen García Hernández',
+				),
+				'dni'             => array(
+					'type'  => 'single',
+					'value' => '43123456A',
+				),
+				'iban'            => array(
+					'type'  => 'single',
+					'value' => 'ES9121000418450200051332',
+				),
+				'gastos'          => array(
+					'type'  => 'array',
+					'value' => array(
+						array(
+							'proveedor' => 'Iberia LAE S.A.',
+							'cif'       => 'A28017648',
+							'factura'   => 'IBE-2025-00123',
+							'fecha'     => '2025-03-10',
+							'importe'   => '245,80 €',
+						),
+						array(
+							'proveedor' => 'Hotel Meliá Castilla',
+							'cif'       => 'A28011069',
+							'factura'   => 'FAC-2025-4567',
+							'fecha'     => '2025-03-12',
+							'importe'   => '312,50 €',
+						),
+						array(
+							'proveedor' => 'Taxi Madrid S.L.',
+							'cif'       => 'B12345678',
+							'factura'   => 'T-2025-0089',
+							'fecha'     => '2025-03-10',
+							'importe'   => '35,00 €',
+						),
+					),
+				),
+			),
+		),
+	);
+}
+
+/**
+ * Get demo data for "Propuesta de gasto".
+ *
+ * @return array
+ */
+function documentate_get_propuesta_gasto_demo() {
+	return array(
+		'propuesta-gasto-prueba' => array(
+			'title'    => 'Documento 0 - Propuesta de gasto para formación del profesorado',
+			'author'   => 'Servicio de Innovación Educativa',
+			'keywords' => 'propuesta, gasto, formación, profesorado',
+			'fields'   => array(
+				'curso'                => array(
+					'type'  => 'single',
+					'value' => '2024/2025',
+				),
+				'numero_decreto'       => array(
+					'type'  => 'single',
+					'value' => '17',
+				),
+				'letra_decreto'        => array(
+					'type'  => 'single',
+					'value' => 'a',
+				),
+				'para'                 => array(
+					'type'  => 'textarea',
+					'value' => 'la formación del profesorado en metodologías activas y competencias digitales',
+				),
+				'objeto'               => array(
+					'type'  => 'textarea',
+					'value' => 'Desarrollo de un programa de formación continua para el profesorado de centros públicos de Canarias en el ámbito de las metodologías activas de aprendizaje y la competencia digital docente.',
+				),
+				'lineadeactuacion'     => array(
+					'type'  => 'textarea',
+					'value' => 'Formación del profesorado y desarrollo profesional docente',
+				),
+				'destinatarios'        => array(
+					'type'  => 'single',
+					'value' => 'Profesorado de centros públicos de educación primaria y secundaria',
+				),
+				'alcance_centros'      => array(
+					'type'  => 'single',
+					'value' => '150',
+				),
+				'alcance_profesorado'  => array(
+					'type'  => 'single',
+					'value' => '2500',
+				),
+				'alcance_alumnado'     => array(
+					'type'  => 'single',
+					'value' => '45000',
+				),
+				'alcance_familias'     => array(
+					'type'  => 'single',
+					'value' => '0',
+				),
+				'gasto_numero'         => array(
+					'type'  => 'single',
+					'value' => '25000',
+				),
+				'gasto_letra'          => array(
+					'type'  => 'single',
+					'value' => 'veinticinco mil euros',
+				),
+				'partida'              => array(
+					'type'  => 'single',
+					'value' => '18.02.322A.640.00',
+				),
+				'g_libramientos'       => array(
+					'type'  => 'array',
+					'value' => array(
+						array(
+							'centro'    => '35001234',
+							'finalidad' => 'Material didáctico para formación',
+							'importe'   => '3.500,00 €',
+						),
+						array(
+							'centro'    => '38002345',
+							'finalidad' => 'Equipamiento tecnológico',
+							'importe'   => '4.200,00 €',
+						),
+					),
+				),
+				'servicios_proveedor'  => array(
+					'type'  => 'single',
+					'value' => 'Formación Docente Canarias S.L.',
+				),
+				'servicios_cif'        => array(
+					'type'  => 'single',
+					'value' => 'B76543210',
+				),
+				'servicios_email'      => array(
+					'type'  => 'single',
+					'value' => 'contacto@formaciondocente.es',
+				),
+				'servicios_telefono'   => array(
+					'type'  => 'single',
+					'value' => '922123456',
+				),
+				'servicios_total'      => array(
+					'type'  => 'single',
+					'value' => '8.500,00 €',
+				),
+				'g_servicios'          => array(
+					'type'  => 'array',
+					'value' => array(
+						array(
+							'concepto'     => 'Curso presencial metodologías activas (20h)',
+							'cantidad'     => '2',
+							'sinimpuestos' => '3.000,00 €',
+							'igic'         => '7%',
+							'irpf'         => '0%',
+							'total'        => '3.210,00 €',
+						),
+						array(
+							'concepto'     => 'Taller competencia digital docente (10h)',
+							'cantidad'     => '3',
+							'sinimpuestos' => '4.500,00 €',
+							'igic'         => '7%',
+							'irpf'         => '0%',
+							'total'        => '4.815,00 €',
+						),
+					),
+				),
+				'suministros_proveedor' => array(
+					'type'  => 'single',
+					'value' => 'TecnoEducación S.A.',
+				),
+				'suministros_cif'      => array(
+					'type'  => 'single',
+					'value' => 'A12345678',
+				),
+				'suministros_email'    => array(
+					'type'  => 'single',
+					'value' => 'ventas@tecnoeducacion.es',
+				),
+				'suministros_telefono' => array(
+					'type'  => 'single',
+					'value' => '928654321',
+				),
+				'g_suministros'        => array(
+					'type'  => 'array',
+					'value' => array(
+						array(
+							'concepto'     => 'Tablets educativas',
+							'cantidad'     => '10',
+							'unitario'     => '350,00 €',
+							'sinimpuestos' => '3.500,00 €',
+							'igic'         => '7%',
+							'irpf'         => '0%',
+							'total'        => '3.745,00 €',
+						),
+					),
+				),
+				'expertos_proveedor'   => array(
+					'type'  => 'single',
+					'value' => 'Dr. Juan Pérez González',
+				),
+				'expertos_cif'         => array(
+					'type'  => 'single',
+					'value' => '43123456B',
+				),
+				'expertos_email'       => array(
+					'type'  => 'single',
+					'value' => 'juan.perez@universidad.es',
+				),
+				'expertos_telefono'    => array(
+					'type'  => 'single',
+					'value' => '650123456',
+				),
+				'g_expertos'           => array(
+					'type'  => 'array',
+					'value' => array(
+						array(
+							'concepto'     => 'Ponencia inaugural jornadas formativas',
+							'cantidad'     => '1',
+							'unitario'     => '500,00 €',
+							'sinimpuestos' => '500,00 €',
+							'igic'         => '0%',
+							'irpf'         => '15%',
+							'total'        => '425,00 €',
+						),
+					),
+				),
+			),
+		),
+	);
 }
 
 /**
@@ -711,6 +1455,57 @@ function documentate_generate_demo_scalar_value( $slug, $type, $data_type, $inde
 		return __( 'Additional observations to complete the template.', 'documentate' );
 	}
 
+	// Repeater "gastos" fields (table row repeater).
+	if ( false !== strpos( $slug, 'proveedor' ) ) {
+		return ( 1 === $index ) ? 'Suministros Ejemplo S.L.' : 'Servicios Demo S.A.';
+	}
+
+	if ( 'cif' === $slug ) {
+		return ( 1 === $index ) ? 'B12345678' : 'A87654321';
+	}
+
+	if ( false !== strpos( $slug, 'factura' ) ) {
+		return sprintf( '%03d/2025', 100 + $index );
+	}
+
+	if ( false !== strpos( $slug, 'importe' ) ) {
+		return ( 1 === $index ) ? '1.250,00 €' : '3.475,50 €';
+	}
+
+	// Fields for autorizacionviaje.odt template.
+	if ( false !== strpos( $slug, 'lugar' ) ) {
+		return 'Madrid';
+	}
+
+	if ( false !== strpos( $slug, 'invitante' ) ) {
+		return 'Ministerio de Educación';
+	}
+
+	if ( false !== strpos( $slug, 'temas' ) ) {
+		return 'Discusión de programas de innovación educativa y coordinación interterritorial.';
+	}
+
+	if ( false !== strpos( $slug, 'pagador' ) ) {
+		return 'Consejería de Educación del Gobierno de Canarias';
+	}
+
+	if ( false !== strpos( $slug, 'apellido1' ) ) {
+		return ( 1 === $index ) ? 'García' : 'Rodríguez';
+	}
+
+	if ( false !== strpos( $slug, 'apellido2' ) ) {
+		return ( 1 === $index ) ? 'López' : 'Martínez';
+	}
+
+	// Fields for gastossuplidos.odt template.
+	if ( false !== strpos( $slug, 'iban' ) ) {
+		return 'ES9121000418450200051332';
+	}
+
+	if ( false !== strpos( $slug, 'nombre_completo' ) ) {
+		return ( 1 === $index ) ? 'María García López' : 'Juan Rodríguez Martínez';
+	}
+
 	if ( false !== strpos( $slug, 'body' ) || false !== strpos( $slug, 'cuerpo' ) ) {
 		$rich  = '<h3>' . __( 'Test heading', 'documentate' ) . '</h3>';
 		$rich .= '<p>' . __( 'First paragraph with example text.', 'documentate' ) . '</p>';
@@ -808,10 +1603,6 @@ add_action( 'init', 'documentate_maybe_seed_demo_documents', 60 );
  */
 require_once plugin_dir_path( __FILE__ ) . 'includes/class-documentate.php';
 
-
-if ( defined( 'WP_CLI' ) && WP_CLI ) {
-	require_once plugin_dir_path( __FILE__ ) . 'includes/class-documentate-wpcli.php';
-}
 
 /**
  * Begins execution of the plugin.

@@ -227,16 +227,25 @@ class SchemaExtractor {
 
 		if ( 'docx' === $template_type ) {
 			$patterns = array(
+				'#</w:t>\s*</w:r>\s*<w:r[^>]*>\s*<w:t[^>]*>#i',
 				'#</w:t>\s*<w:r[^>]*>\s*<w:t[^>]*>#i',
 				'#</w:t>\s*<w:t[^>]*>#i',
 			);
 			$xml = preg_replace( $patterns, '', $xml );
 		} else {
-			$patterns = array(
-				'#</text:span>\s*<text:span[^>]*>#i',
-				'#</text:p>\s*<text:p[^>]*>#i',
-			);
-			$xml = preg_replace( $patterns, ' ', $xml );
+			// Handle nested spans: multiple closing tags followed by multiple opening tags.
+			// Loop to collapse nested structures like </span></span><span><span>.
+			$prev = '';
+			while ( $prev !== $xml ) {
+				$prev = $xml;
+				$xml  = preg_replace(
+					'#(</text:span>\s*)+(<text:span[^>]*>\s*)+#i',
+					' ',
+					$xml
+				);
+			}
+			// Also collapse paragraph boundaries.
+			$xml = preg_replace( '#</text:p>\s*<text:p[^>]*>#i', ' ', $xml );
 		}
 
 		$xml = preg_replace( '/[\x00-\x1F\x7F]/', '', $xml );
@@ -391,7 +400,8 @@ class SchemaExtractor {
 		$stack     = array();
 
 		// First pass: identify repeaters from tbs:row or tbs:cell block patterns.
-		$tbs_repeaters = $this->detect_tbs_repeaters( $placeholders );
+		$tbs_repeaters       = $this->detect_tbs_repeaters( $placeholders );
+		$added_tbs_repeaters = array();
 
 		foreach ( $placeholders as $token ) {
 			$parameters = isset( $token['parameters'] ) ? $token['parameters'] : array();
@@ -412,12 +422,22 @@ class SchemaExtractor {
 			if ( preg_match( '/^tbs:(row|cell|p|page)/', $block_mode ) ) {
 				$token_name = isset( $token['name'] ) ? (string) $token['name'] : '';
 				$base_name  = $this->extract_tbs_repeater_base( $token_name );
-				if ( '' !== $base_name && isset( $tbs_repeaters[ $base_name ] ) && ! isset( $repeaters[ $base_name . '_idx' ] ) ) {
-					$repeater_entry                         = $this->build_tbs_repeater_entry( $base_name, $tbs_repeaters[ $base_name ] );
-					$repeaters[]                            = $repeater_entry;
-					$repeaters[ $base_name . '_idx' ]       = count( $repeaters ) - 1;
+				if ( '' !== $base_name && isset( $tbs_repeaters[ $base_name ] ) && ! isset( $added_tbs_repeaters[ $base_name ] ) ) {
+					$repeater_entry                   = $this->build_tbs_repeater_entry( $base_name, $tbs_repeaters[ $base_name ] );
+					$repeaters[]                      = $repeater_entry;
+					$added_tbs_repeaters[ $base_name ] = true;
 				}
 				continue;
+			}
+
+			// Check if this is a dotted field belonging to a TBS repeater (e.g., asistentes.nombre).
+			// These fields are already collected in detect_tbs_repeaters(), so skip them here.
+			$token_name = isset( $token['name'] ) ? (string) $token['name'] : '';
+			if ( false !== strpos( $token_name, '.' ) && empty( $stack ) ) {
+				$base_name = $this->extract_tbs_repeater_base( $token_name );
+				if ( '' !== $base_name && isset( $tbs_repeaters[ $base_name ] ) ) {
+					continue;
+				}
 			}
 
 			$field = $this->build_field_entry( $token );
@@ -426,7 +446,18 @@ class SchemaExtractor {
 			}
 
 			if ( empty( $stack ) ) {
-				$fields[] = $field;
+				// Deduplicate: only add if slug doesn't already exist.
+				$field_slug = isset( $field['slug'] ) ? $field['slug'] : '';
+				$exists     = false;
+				foreach ( $fields as $existing ) {
+					if ( isset( $existing['slug'] ) && $existing['slug'] === $field_slug ) {
+						$exists = true;
+						break;
+					}
+				}
+				if ( ! $exists ) {
+					$fields[] = $field;
+				}
 			} else {
 				// Inside a repeater: strip the repeater base from dotted field names like "anexos.title".
 				$current_index = end( $stack );
@@ -529,6 +560,12 @@ class SchemaExtractor {
 		$max_value   = isset( $parameters['maxvalue'] ) ? (string) $parameters['maxvalue'] : '';
 		$length      = isset( $parameters['length'] ) ? (string) $parameters['length'] : '';
 
+		// Case transformation: upper, lower, title.
+		$case = isset( $parameters['case'] ) ? strtolower( trim( (string) $parameters['case'] ) ) : '';
+		if ( '' !== $case && ! in_array( $case, array( 'upper', 'lower', 'title' ), true ) ) {
+			$case = '';
+		}
+
 		if ( '' === $pattern ) {
 			$default_config = self::get_default_pattern( $field_type );
 			if ( $default_config ) {
@@ -556,6 +593,7 @@ class SchemaExtractor {
 			'minvalue'    => $min_value,
 			'maxvalue'    => $max_value,
 			'length'      => $length,
+			'case'        => $case,
 			'parameters'  => $parameters,
 			'raw'         => isset( $token['raw'] ) ? (string) $token['raw'] : '',
 			'source'      => isset( $token['source'] ) ? (string) $token['source'] : '',
@@ -799,10 +837,32 @@ class SchemaExtractor {
 					$parts      = explode( '.', $name );
 					$field_name = isset( $parts[1] ) ? $parts[1] : '';
 					if ( '' !== $field_name ) {
+						// Extract field type from parameters.
+						$field_type  = isset( $parameters['type'] ) ? strtolower( trim( (string) $parameters['type'] ) ) : 'text';
+						$valid_types = array( 'text', 'textarea', 'html', 'number', 'date', 'email', 'url' );
+						if ( ! in_array( $field_type, $valid_types, true ) ) {
+							$field_type = 'text';
+						}
+
+						// Extract case attribute if present.
+						$field_case = isset( $parameters['case'] ) ? strtolower( trim( (string) $parameters['case'] ) ) : '';
+						if ( '' !== $field_case && ! in_array( $field_case, array( 'upper', 'lower', 'title' ), true ) ) {
+							$field_case = '';
+						}
+
 						$repeaters[ $base_name ]['fields'][ $field_name ] = array(
-							'name' => $field_name,
-							'slug' => sanitize_key( $field_name ),
-							'type' => 'text',
+							'name'        => $field_name,
+							'slug'        => sanitize_key( $field_name ),
+							'type'        => $field_type,
+							'title'       => isset( $parameters['title'] ) ? sanitize_text_field( $parameters['title'] ) : '',
+							'placeholder' => isset( $parameters['placeholder'] ) ? sanitize_text_field( $parameters['placeholder'] ) : '',
+							'description' => isset( $parameters['description'] ) ? sanitize_text_field( $parameters['description'] ) : '',
+							'pattern'     => isset( $parameters['pattern'] ) ? (string) $parameters['pattern'] : '',
+							'patternmsg'  => isset( $parameters['patternmsg'] ) ? sanitize_text_field( $parameters['patternmsg'] ) : '',
+							'minvalue'    => isset( $parameters['minvalue'] ) ? (string) $parameters['minvalue'] : '',
+							'maxvalue'    => isset( $parameters['maxvalue'] ) ? (string) $parameters['maxvalue'] : '',
+							'length'      => isset( $parameters['length'] ) ? (string) $parameters['length'] : '',
+							'case'        => $field_case,
 						);
 					}
 				}
@@ -842,14 +902,15 @@ class SchemaExtractor {
 					'name'        => $field_name,
 					'slug'        => sanitize_key( $field_name ),
 					'type'        => isset( $field_info['type'] ) ? $field_info['type'] : 'text',
-					'title'       => '',
-					'placeholder' => '',
-					'description' => '',
-					'pattern'     => '',
-					'patternmsg'  => '',
-					'minvalue'    => '',
-					'maxvalue'    => '',
-					'length'      => '',
+					'title'       => isset( $field_info['title'] ) ? $field_info['title'] : '',
+					'placeholder' => isset( $field_info['placeholder'] ) ? $field_info['placeholder'] : '',
+					'description' => isset( $field_info['description'] ) ? $field_info['description'] : '',
+					'pattern'     => isset( $field_info['pattern'] ) ? $field_info['pattern'] : '',
+					'patternmsg'  => isset( $field_info['patternmsg'] ) ? $field_info['patternmsg'] : '',
+					'minvalue'    => isset( $field_info['minvalue'] ) ? $field_info['minvalue'] : '',
+					'maxvalue'    => isset( $field_info['maxvalue'] ) ? $field_info['maxvalue'] : '',
+					'length'      => isset( $field_info['length'] ) ? $field_info['length'] : '',
+					'case'        => isset( $field_info['case'] ) ? $field_info['case'] : '',
 					'parameters'  => array(),
 					'raw'         => '',
 					'source'      => '',

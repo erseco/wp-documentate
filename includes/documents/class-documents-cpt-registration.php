@@ -55,7 +55,7 @@ class Documents_CPT_Registration {
 			'capability_type'  => 'post',
 			'map_meta_cap'     => true,
 			'hierarchical'     => false,
-			'supports'         => array( 'title', 'revisions', 'comments' ),
+			'supports'         => array( 'title', 'author', 'revisions', 'comments' ),
 			'taxonomies'       => array( 'category' ),
 			'has_archive'      => false,
 			'rewrite'          => false,

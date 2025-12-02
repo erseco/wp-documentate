@@ -303,6 +303,24 @@ msgstr ""
 msgid "help text"
 msgstr ""
 
+msgid "Case"
+msgstr ""
+
+msgid "Text case transformation in the generated document."
+msgstr ""
+
+msgid "Date format"
+msgstr ""
+
+msgid "for date fields. Uses"
+msgstr ""
+
+msgid "Default:"
+msgstr ""
+
+msgid "Examples:"
+msgstr ""
+
 msgid "Repeater (lists):"
 msgstr ""
 
@@ -312,13 +330,25 @@ msgstr ""
 msgid "and define the fields for each item inside."
 msgstr ""
 
+msgid "Repeater in tables:"
+msgstr ""
+
+msgid "to repeat table rows, use"
+msgstr ""
+
+msgid "in the first field of the row instead of block=begin/end."
+msgstr ""
+
 msgid "Quick examples:"
 msgstr ""
 
-msgid "Tip: in DOCX the text can be fragmented; make sure each marker"
+msgid "-- Table row:"
 msgstr ""
 
-msgid "remains intact."
+msgid "Tip: in ODT/DOCX the text can be fragmented internally. To ensure each marker"
+msgstr ""
+
+msgid "remains intact, write it in a plain text editor, then copy and paste without formatting."
 msgstr ""
 
 msgid "Documentate Converter"
@@ -385,6 +415,12 @@ msgid "Processing with LibreOffice WASM."
 msgstr ""
 
 msgid "Could not initialize the WordPress filesystem."
+msgstr ""
+
+msgid "Title is required."
+msgstr ""
+
+msgid "Enter document title"
 msgstr ""
 
 msgid "Export DOCX"
@@ -561,6 +597,33 @@ msgstr ""
 msgid "Could not open the ODT file for rich text formatting."
 msgstr ""
 
+msgid "ZipArchive is not available for metadata."
+msgstr ""
+
+msgid "Could not open the ODT file for metadata."
+msgstr ""
+
+msgid "meta.xml not found in ODT."
+msgstr ""
+
+msgid "Could not parse meta.xml."
+msgstr ""
+
+msgid "office:meta element not found."
+msgstr ""
+
+msgid "Could not open the DOCX file for metadata."
+msgstr ""
+
+msgid "docProps/core.xml not found in DOCX."
+msgstr ""
+
+msgid "Could not parse core.xml."
+msgstr ""
+
+msgid "cp:coreProperties element not found."
+msgstr ""
+
 msgid "The selected template was not found."
 msgstr ""
 
@@ -643,20 +706,6 @@ msgid "Pending - Ready for review"
 msgstr ""
 
 msgid "Published - Final (locked)"
-msgstr ""
-
-#. translators: %s: plugin version number.
-#, php-format
-msgid "You are adding sample data to a non-development version of Documentate (v%s)"
-msgstr ""
-
-msgid "Do you want to continue?"
-msgstr ""
-
-msgid "Starting sample data creation..."
-msgstr ""
-
-msgid "Sample data created successfully!"
 msgstr ""
 
 msgid "Configure the ZetaJS executable path in DOCUMENTATE_ZETAJS_BIN."

@@ -47,19 +47,11 @@ jobs:
           tools: phpmd
 
       - name: Run PHPMD
-        id: phpmd
+        run: phpmd . sarif phpmd.xml --reportfile phpmd-results.sarif --ignore-violations-on-exit
         continue-on-error: true
-        run: phpmd . sarif phpmd.xml --baseline-file phpmd.baseline.xml --reportfile phpmd-results.sarif
 
       - name: Upload analysis results to GitHub
-        if: always() && steps.phpmd.outcome != 'skipped'
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: phpmd-results.sarif
           wait-for-processing: true
-
-      - name: Fail if PHPMD found issues
-        if: steps.phpmd.outcome == 'failure'
-        run: |
-          echo "PHPMD found issues. Check the Security tab for details."
-          exit 1

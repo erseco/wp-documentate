@@ -85,6 +85,9 @@ class Documentate_Documents {
 		add_action( 'add_meta_boxes', array( $this, 'register_meta_boxes' ) );
 		add_action( 'save_post_documentate_document', array( $this, 'save_meta_boxes' ) );
 
+		// Title placeholder.
+		add_filter( 'enter_title_here', array( $this, 'title_placeholder' ), 10, 2 );
+
 		// Revision handling - keep hooks on $this for backwards compatibility.
 		add_action( 'wp_save_post_revision', array( $this, 'copy_meta_to_revision' ), 10, 2 );
 		add_action( 'wp_restore_post_revision', array( $this, 'restore_meta_from_revision' ), 10, 2 );
@@ -420,7 +423,7 @@ class Documentate_Documents {
 			'capability_type'    => 'post',
 			'map_meta_cap'       => true,
 			'hierarchical'       => false,
-			'supports'           => array( 'title', 'revisions', 'comments' ),
+			'supports'           => array( 'title', 'author', 'revisions' ),
 			'taxonomies'        => array( 'category' ),
 			'has_archive'        => false,
 			'rewrite'            => false,
@@ -508,6 +511,20 @@ class Documentate_Documents {
 	}
 
 	/**
+	 * Set custom placeholder for the title field.
+	 *
+	 * @param string  $placeholder Default placeholder text.
+	 * @param WP_Post $post        Current post object.
+	 * @return string
+	 */
+	public function title_placeholder( $placeholder, $post ) {
+		if ( 'documentate_document' === $post->post_type ) {
+			return __( 'Enter document title', 'documentate' );
+		}
+		return $placeholder;
+	}
+
+	/**
 	 * Register admin meta boxes for document sections.
 	 */
 	public function register_meta_boxes() {
@@ -527,7 +544,7 @@ class Documentate_Documents {
 			array( $this, 'render_sections_metabox' ),
 			'documentate_document',
 			'normal',
-			'default'
+			'high'
 		);
 	}
 
@@ -713,7 +730,8 @@ class Documentate_Documents {
 			if ( 'single' === $type ) {
 				$this->render_single_input_control( $meta_key, $label, $value, $field_type, $data_type, $raw_field, $describedby, $validation );
 			} elseif ( 'rich' === $type ) {
-				$this->render_rich_editor_control( $meta_key, $value );
+				$is_locked = ( 'publish' === $post->post_status );
+				$this->render_rich_editor_control( $meta_key, $value, $is_locked );
 			} else {
 				$this->render_textarea_control( $meta_key, $value, $raw_field, $describedby, $validation );
 			}
@@ -818,10 +836,11 @@ class Documentate_Documents {
 	/**
 	 * Render a rich text editor control.
 	 *
-	 * @param string $meta_key The meta key for the field.
-	 * @param string $value    The current field value.
+	 * @param string $meta_key  The meta key for the field.
+	 * @param string $value     The current field value.
+	 * @param bool   $is_locked Whether the editor should be readonly (default false).
 	 */
-	private function render_rich_editor_control( $meta_key, $value ) {
+	private function render_rich_editor_control( $meta_key, $value, $is_locked = false ) {
 		$is_collaborative = $this->is_collaborative_editing_enabled();
 
 		if ( $is_collaborative ) {
@@ -829,6 +848,17 @@ class Documentate_Documents {
 			echo '<textarea id="' . esc_attr( $meta_key ) . '" name="' . esc_attr( $meta_key ) . '" class="documentate-collab-textarea" rows="8">' . esc_textarea( $value ) . '</textarea>';
 			echo '</div>';
 		} else {
+			$tinymce_config = array(
+				'toolbar1'        => 'formatselect,bold,italic,underline,link,bullist,numlist,alignleft,aligncenter,alignright,alignjustify,table,undo,redo,searchreplace,removeformat',
+				'content_style'   => 'table{border-collapse:collapse}th,td{border:1px solid #000;padding:2px}',
+				// TinyMCE content filtering: remove elements not supported by OpenTBS.
+				'invalid_elements' => 'span,button,form,select,input,textarea,div,iframe,embed,object,label,font,img,video,audio,canvas,svg,script,style,noscript,map,area,applet',
+			);
+
+			if ( $is_locked ) {
+				$tinymce_config['readonly'] = 1;
+			}
+
 			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- wp_editor handles output escaping.
 			wp_editor(
 				$value,
@@ -838,10 +868,8 @@ class Documentate_Documents {
 					'textarea_rows' => 8,
 					'media_buttons' => false,
 					'teeny'         => false,
-					'tinymce'       => array(
-						'toolbar1'      => 'formatselect,bold,italic,underline,link,bullist,numlist,alignleft,aligncenter,alignright,alignjustify,undo,redo,removeformat',
-						'content_style' => 'table,th,td{border:1px solid #000;border-collapse:collapse}table{border-collapse:collapse}',
-					),
+					'wpautop'       => false,
+					'tinymce'       => $tinymce_config,
 					'quicktags'     => true,
 					'editor_height' => 220,
 				)
@@ -1443,7 +1471,10 @@ class Documentate_Documents {
 	}
 
 	/**
-	 * Sanitize rich text content by stripping disallowed blocks completely.
+	 * Sanitize rich text content by stripping dangerous elements only.
+	 *
+	 * Only removes security-critical elements (script, style, iframe).
+	 * Full sanitization and cleanup is deferred to document generation time.
 	 *
 	 * @param string $value Raw submitted value.
 	 * @return string
@@ -1455,9 +1486,10 @@ class Documentate_Documents {
 			return '';
 		}
 
-		$value = $this->normalize_literal_line_endings( $value );
+		// Normalize line endings.
 		$value = str_replace( array( "\r\n", "\r" ), "\n", $value );
 
+		// Only strip dangerous elements (security filtering).
 		$patterns = array(
 			'#<script\b[^>]*>.*?</script>#is',
 			'#<style\b[^>]*>.*?</style>#is',
@@ -1465,15 +1497,8 @@ class Documentate_Documents {
 		);
 
 		$clean = preg_replace( $patterns, '', $value );
-		if ( null === $clean ) {
-			$clean = $value;
-		}
 
-		$sanitized = wp_kses_post( $clean );
-
-		$sanitized = $this->normalize_literal_line_endings( $sanitized );
-		$sanitized = str_replace( array( "\r\n", "\r" ), "\n", $sanitized );
-		return $this->remove_linebreak_artifacts( $sanitized );
+		return null === $clean ? $value : $clean;
 	}
 
 	/**
@@ -2255,15 +2280,22 @@ class Documentate_Documents {
 					'textarea_rows' => 6,
 					'media_buttons' => false,
 					'teeny'         => false,
+					'wpautop'       => false,
 					'tinymce'       => array(
-						'toolbar1'      => 'formatselect,bold,italic,underline,link,bullist,numlist,alignleft,aligncenter,alignright,alignjustify,undo,redo,removeformat',
-						'content_style' => 'table,th,td{border:1px solid #000;border-collapse:collapse}table{border-collapse:collapse}',
+						'toolbar1'         => 'formatselect,bold,italic,underline,link,bullist,numlist,alignleft,aligncenter,alignright,alignjustify,table,undo,redo,searchreplace,removeformat',
+						'content_style'    => 'table{border-collapse:collapse}th,td{border:1px solid #000;padding:2px}',
+						// TinyMCE content filtering: remove elements not supported by OpenTBS.
+						'invalid_elements' => 'article,span,button,form,select,input,textarea,div,iframe,embed,object,label,font,img,video,audio,canvas,svg,script,style,noscript,map,area,applet',
+						'valid_elements'   => 'a[href|title|target],strong/b,em/i,p,br,ul,ol,li,' .
+											  'h1,h2,h3,h4,h5,h6,blockquote,code,pre,' .
+											  'table[border|cellpadding|cellspacing],tr,td[colspan|rowspan|align],th[colspan|rowspan|align]',
+
 					),
 					'quicktags'     => true,
 					'editor_height' => 200,
 				)
 			);
-					echo '</div>';
+			echo '</div>';
 		}
 
 		echo '</div>';

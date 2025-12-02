@@ -66,7 +66,7 @@ class Documentate_Doctype_Help_Notice {
 
 		$markup .= '<p><strong>' . esc_html__( 'Fields:', 'documentate' ) . '</strong> ';
 		$markup .= esc_html__( 'write markers like this:', 'documentate' ) . ' <code>';
-		$markup .= esc_html( "[name;type='...';title='...';placeholder='...';description='...';pattern='...';patternmsg='...';minvalue='...';maxvalue='...';length='...']" );
+		$markup .= esc_html( "[name;type='...';title='...';case='...';placeholder='...';description='...']" );
 		$markup .= '</code>.</p>';
 
 		$markup .= '<ul style="margin-left:1.2em;list-style:disc;">';
@@ -83,21 +83,38 @@ class Documentate_Doctype_Help_Notice {
 		$markup .= '<li><strong>' . esc_html__( 'UI Help', 'documentate' ) . '</strong>: <code>title</code> ';
 		$markup .= '(' . esc_html__( 'label', 'documentate' ) . '), <code>placeholder</code>, <code>description</code> ';
 		$markup .= '(' . esc_html__( 'help text', 'documentate' ) . ').</li>';
+
+		$markup .= '<li><strong>' . esc_html__( 'Case', 'documentate' ) . '</strong>: <code>case</code> ';
+		$markup .= '(<code>upper</code>, <code>lower</code>, <code>title</code>). ';
+		$markup .= esc_html__( 'Text case transformation in the generated document.', 'documentate' ) . '</li>';
+
+		$markup .= '<li><strong>' . esc_html__( 'Date format', 'documentate' ) . '</strong>: <code>format</code> ';
+		$markup .= esc_html__( 'for date fields. Uses', 'documentate' ) . ' ';
+		$markup .= '<a href="https://www.php.net/manual/en/datetime.format.php" target="_blank" rel="noopener">PHP date format</a>. ';
+		$markup .= esc_html__( 'Default:', 'documentate' ) . ' <code>d/m/Y</code>. ';
+		$markup .= esc_html__( 'Examples:', 'documentate' ) . ' <code>Y-m-d</code>, <code>j \\de F \\de Y</code>.</li>';
 		$markup .= '</ul>';
 
 		$markup .= '<p><strong>' . esc_html__( 'Repeater (lists):', 'documentate' ) . '</strong> ';
 		$markup .= esc_html__( 'use blocks with', 'documentate' ) . ' <code>[items;block=begin]</code> &hellip; <code>[items;block=end]</code> ';
 		$markup .= esc_html__( 'and define the fields for each item inside.', 'documentate' ) . '</p>';
 
+		$markup .= '<p><strong>' . esc_html__( 'Repeater in tables:', 'documentate' ) . '</strong> ';
+		$markup .= esc_html__( 'to repeat table rows, use', 'documentate' ) . ' <code>block=tbs:row</code> ';
+		$markup .= esc_html__( 'in the first field of the row instead of block=begin/end.', 'documentate' ) . '</p>';
+
 		$markup .= '<p><strong>' . esc_html__( 'Quick examples:', 'documentate' ) . '</strong></p>';
 
 		$markup .= '<pre style="white-space:pre-wrap;">';
 		$markup .= esc_html( "[Email;type='email';title='Email';placeholder='you@domain.com']\n" );
-		$markup .= esc_html( "[items;block=begin][Item title;type='text'] [items.content;type='html'][items;block=end]" );
+		$markup .= esc_html( "[fecha;type='date';format='j \\de F \\de Y']\n" );
+		$markup .= esc_html( "[items;block=begin][items.title;type='text'] [items.content;type='html'][items;block=end]\n" );
+		$markup .= esc_html__( '-- Table row:', 'documentate' ) . "\n";
+		$markup .= esc_html( "| [items.name;block=tbs:row;type='text'] | [items.qty;type='number'] |" );
 		$markup .= '</pre>';
 
-		$markup .= '<p>' . esc_html__( 'Tip: in DOCX the text can be fragmented; make sure each marker', 'documentate' ) . ' ';
-		$markup .= '<code>[...]</code> ' . esc_html__( 'remains intact.', 'documentate' ) . '</p>';
+		$markup .= '<p>' . esc_html__( 'Tip: in ODT/DOCX the text can be fragmented internally. To ensure each marker', 'documentate' ) . ' ';
+		$markup .= '<code>[...]</code> ' . esc_html__( 'remains intact, write it in a plain text editor, then copy and paste without formatting.', 'documentate' ) . '</p>';
 
 		return $markup;
 	}

@@ -553,4 +553,41 @@ class Documentate_Admin {
 
 		return $labels;
 	}
+
+	/**
+	 * Register TinyMCE table and searchreplace plugins for document editors.
+	 *
+	 * @param array<string,string> $plugins Array of external TinyMCE plugins.
+	 * @return array<string,string> Modified array of plugins.
+	 */
+	public function add_tinymce_table_plugin( $plugins ) {
+		$screen = get_current_screen();
+		if ( $screen && 'documentate_document' === $screen->post_type ) {
+			$suffix                   = defined( 'SCRIPT_DEBUG' ) && SCRIPT_DEBUG ? '' : '.min';
+			$plugins['table']         = plugin_dir_url( __FILE__ ) . 'mce/table/plugin' . $suffix . '.js';
+			$plugins['searchreplace'] = plugin_dir_url( __FILE__ ) . 'mce/searchreplace/plugin' . $suffix . '.js';
+		}
+		return $plugins;
+	}
+
+	/**
+	 * Configure TinyMCE table plugin options.
+	 *
+	 * @param array<string,mixed> $init TinyMCE init settings.
+	 * @return array<string,mixed> Modified init settings.
+	 */
+	public function configure_tinymce_table_options( $init ) {
+		$screen = get_current_screen();
+		if ( $screen && 'documentate_document' === $screen->post_type ) {
+			$init['table_toolbar']        = false;
+			$init['table_responsive_width'] = true;
+			$init['table_resize_bars']    = true;
+			$init['table_grid']           = true;
+			$init['table_tab_navigation'] = true;
+			$init['table_advtab']         = true;
+			$init['table_cell_advtab']    = true;
+			$init['table_row_advtab']     = true;
+		}
+		return $init;
+	}
 }
