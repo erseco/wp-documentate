@@ -849,8 +849,10 @@ class Documentate_Documents {
 			echo '</div>';
 		} else {
 			$tinymce_config = array(
-				'toolbar1'      => 'formatselect,bold,italic,underline,link,bullist,numlist,alignleft,aligncenter,alignright,alignjustify,table,undo,redo,searchreplace,removeformat',
-				'content_style' => 'table{border-collapse:collapse}th,td{border:1px solid #000;padding:2px}',
+				'toolbar1'        => 'formatselect,bold,italic,underline,link,bullist,numlist,alignleft,aligncenter,alignright,alignjustify,table,undo,redo,searchreplace,removeformat',
+				'content_style'   => 'table{border-collapse:collapse}th,td{border:1px solid #000;padding:2px}',
+				// TinyMCE content filtering: remove elements not supported by OpenTBS.
+				'invalid_elements' => 'span,button,form,select,input,textarea,div,iframe,embed,object,label,font,img,video,audio,canvas,svg,script,style,noscript,map,area,applet',
 			);
 
 			if ( $is_locked ) {
@@ -872,11 +874,6 @@ class Documentate_Documents {
 					'editor_height' => 220,
 				)
 			);
-
-			// Warning element for unsupported HTML formatting (hidden by default).
-			echo '<p id="' . esc_attr( $meta_key ) . '-unsupported-warning" class="description documentate-unsupported-warning" style="display:none;color:#d63638;margin-top:8px;">';
-			echo esc_html__( 'This field contains unsupported formatting (div, font, form…). Please remove it.', 'documentate' );
-			echo '</p>';
 		}
 	}
 
@@ -2285,18 +2282,15 @@ class Documentate_Documents {
 					'teeny'         => false,
 					'wpautop'       => false,
 					'tinymce'       => array(
-						'toolbar1'      => 'formatselect,bold,italic,underline,link,bullist,numlist,alignleft,aligncenter,alignright,alignjustify,table,undo,redo,searchreplace,removeformat',
-						'content_style' => 'table{border-collapse:collapse}th,td{border:1px solid #000;padding:2px}',
+						'toolbar1'         => 'formatselect,bold,italic,underline,link,bullist,numlist,alignleft,aligncenter,alignright,alignjustify,table,undo,redo,searchreplace,removeformat',
+						'content_style'    => 'table{border-collapse:collapse}th,td{border:1px solid #000;padding:2px}',
+						// TinyMCE content filtering: remove elements not supported by OpenTBS.
+						'invalid_elements' => 'span,button,form,select,input,textarea,div,iframe,embed,object,label,font,img,video,audio,canvas,svg,script,style,noscript,map,area,applet',
 					),
 					'quicktags'     => true,
 					'editor_height' => 200,
 				)
 			);
-
-			// Warning element for unsupported HTML formatting (hidden by default).
-			echo '<p id="' . esc_attr( $meta_key ) . '-unsupported-warning" class="description documentate-unsupported-warning" style="display:none;color:#d63638;margin-top:8px;">';
-			echo esc_html__( 'This field contains unsupported formatting (div, font, form…). Please remove it.', 'documentate' );
-			echo '</p>';
 			echo '</div>';
 		}
 

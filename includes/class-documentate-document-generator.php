@@ -738,14 +738,14 @@ class Documentate_Document_Generator {
 	}
 
 	/**
-	 * Strip unsupported HTML tags from content before document generation.
+	 * Strip unsupported HTML tags and attributes from content before document generation.
 	 *
-	 * Removes tags that are not properly supported by OpenTBS/ODT/DOCX conversion:
-	 * div, font, form, input, button. Inline styles (style attribute) are kept
-	 * as they are supported.
+	 * Removes tags that are not properly supported by OpenTBS/ODT/DOCX conversion.
+	 * Also removes id and class attributes which are not supported.
+	 * Inline styles (style attribute) are kept as they are supported.
 	 *
 	 * @param string $value HTML content.
-	 * @return string Content with unsupported tags removed.
+	 * @return string Content with unsupported tags and attributes removed.
 	 */
 	private static function strip_unsupported_html_tags( $value ) {
 		$value = is_string( $value ) ? $value : '';
@@ -754,7 +754,31 @@ class Documentate_Document_Generator {
 		}
 
 		// List of unsupported tags to remove (keeping their inner content).
-		$unsupported_tags = array( 'div', 'font', 'form', 'input', 'button' );
+		$unsupported_tags = array(
+			'span',
+			'button',
+			'form',
+			'select',
+			'input',
+			'textarea',
+			'div',
+			'iframe',
+			'embed',
+			'object',
+			'label',
+			'font',
+			'img',
+			'video',
+			'audio',
+			'canvas',
+			'svg',
+			'script',
+			'style',
+			'noscript',
+			'map',
+			'area',
+			'applet',
+		);
 
 		foreach ( $unsupported_tags as $tag ) {
 			// Remove opening tags (with or without attributes).
@@ -767,6 +791,16 @@ class Documentate_Document_Generator {
 			if ( ! is_string( $value ) ) {
 				$value = '';
 			}
+		}
+
+		// Remove id and class attributes (not supported by OpenTBS).
+		$value = preg_replace( '/\s+id\s*=\s*["\'][^"\']*["\']/i', '', $value );
+		if ( ! is_string( $value ) ) {
+			$value = '';
+		}
+		$value = preg_replace( '/\s+class\s*=\s*["\'][^"\']*["\']/i', '', $value );
+		if ( ! is_string( $value ) ) {
+			$value = '';
 		}
 
 		return $value;
