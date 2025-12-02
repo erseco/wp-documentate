@@ -423,7 +423,7 @@ class Documentate_Documents {
 			'capability_type'    => 'post',
 			'map_meta_cap'       => true,
 			'hierarchical'       => false,
-			'supports'           => array( 'title', 'revisions' ),
+			'supports'           => array( 'title', 'author', 'revisions' ),
 			'taxonomies'        => array( 'category' ),
 			'has_archive'        => false,
 			'rewrite'            => false,
