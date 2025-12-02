@@ -573,6 +573,33 @@ msgstr ""
 msgid "Could not open the ODT file for rich text formatting."
 msgstr ""
 
+msgid "ZipArchive is not available for metadata."
+msgstr ""
+
+msgid "Could not open the ODT file for metadata."
+msgstr ""
+
+msgid "meta.xml not found in ODT."
+msgstr ""
+
+msgid "Could not parse meta.xml."
+msgstr ""
+
+msgid "office:meta element not found."
+msgstr ""
+
+msgid "Could not open the DOCX file for metadata."
+msgstr ""
+
+msgid "docProps/core.xml not found in DOCX."
+msgstr ""
+
+msgid "Could not parse core.xml."
+msgstr ""
+
+msgid "cp:coreProperties element not found."
+msgstr ""
+
 msgid "The selected template was not found."
 msgstr ""
 

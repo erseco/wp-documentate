@@ -810,3 +810,30 @@ msgstr "Título en mayúsculas en el documento"
 
 msgid "The title will be rendered in uppercase in the generated document. It is recommended to write it in lowercase here for readability and document metadata."
 msgstr "El título se pintará en mayúsculas en el documento generado. Se recomienda escribirlo en minúsculas aquí para favorecer su legibilidad y los metadatos del documento."
+
+msgid "ZipArchive is not available for metadata."
+msgstr "ZipArchive no está disponible para metadatos."
+
+msgid "Could not open the ODT file for metadata."
+msgstr "No se pudo abrir el archivo ODT para metadatos."
+
+msgid "meta.xml not found in ODT."
+msgstr "meta.xml no encontrado en ODT."
+
+msgid "Could not parse meta.xml."
+msgstr "No se pudo analizar meta.xml."
+
+msgid "office:meta element not found."
+msgstr "Elemento office:meta no encontrado."
+
+msgid "Could not open the DOCX file for metadata."
+msgstr "No se pudo abrir el archivo DOCX para metadatos."
+
+msgid "docProps/core.xml not found in DOCX."
+msgstr "docProps/core.xml no encontrado en DOCX."
+
+msgid "Could not parse core.xml."
+msgstr "No se pudo analizar core.xml."
+
+msgid "cp:coreProperties element not found."
+msgstr "Elemento cp:coreProperties no encontrado."
