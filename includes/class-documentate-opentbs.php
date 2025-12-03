@@ -220,6 +220,9 @@ class Documentate_OpenTBS {
 				$fields = array();
 			}
 
+			// Pre-process visibility blocks [onshow;block=begin;bloc=FIELD]...[onshow;block=end].
+			$tbs_engine->Source = self::process_visibility_blocks( $tbs_engine->Source, $fields );
+
 			$tbs_engine->ResetVarRef( false );
 
 			// First merge repeater blocks (arrays), then scalar fields.
@@ -260,6 +263,45 @@ class Documentate_OpenTBS {
 			}
 			return new WP_Error( 'documentate_opentbs_error', $e->getMessage() );
 		}
+	}
+
+	/**
+	 * Pre-process visibility blocks in template content.
+	 *
+	 * Evaluates [onshow;block=begin;bloc=FIELD]...[onshow;block=end] markers
+	 * and removes blocks where the referenced field is empty.
+	 *
+	 * @param string              $content Template XML content.
+	 * @param array<string,mixed> $fields  Merge fields data.
+	 * @return string Processed content.
+	 */
+	private static function process_visibility_blocks( $content, $fields ) {
+		// Pattern to match [onshow;block=begin;bloc=FIELD_NAME]...[onshow;block=end]
+		// The bloc= value may be quoted or unquoted.
+		$pattern = '/\[onshow;block=begin;bloc=[\'"]?([^\];\'"]+)[\'"]?\](.*?)\[onshow;block=end\]/s';
+
+		return preg_replace_callback(
+			$pattern,
+			function ( $matches ) use ( $fields ) {
+				$field_name    = trim( $matches[1] );
+				$block_content = $matches[2];
+
+				// Check if the referenced field has data.
+				$has_data = false;
+				if ( isset( $fields[ $field_name ] ) ) {
+					$value = $fields[ $field_name ];
+					if ( is_array( $value ) ) {
+						$has_data = ! empty( $value );
+					} else {
+						$has_data = ( '' !== trim( (string) $value ) );
+					}
+				}
+
+				// Return content if has data, empty string otherwise.
+				return $has_data ? $block_content : '';
+			},
+			$content
+		);
 	}
 
 	/**
