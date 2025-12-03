@@ -607,4 +607,90 @@ class DocumentateOpenTBSTest extends PHPUnit\Framework\TestCase {
 		$this->assertStringContainsString( 'Tercera línea', $result );
 		$this->assertStringContainsString( '<w:br', $result );
 	}
+
+	/**
+	 * It should keep visibility block content when referenced field has array data.
+	 */
+	public function test_process_visibility_blocks_keeps_content_with_array_data() {
+		$content = 'Before [onshow;block=begin;bloc=items]Block content[onshow;block=end] After';
+		$fields  = array( 'items' => array( array( 'name' => 'Test' ) ) );
+
+		$result = $this->call_process_visibility_blocks( $content, $fields );
+
+		$this->assertStringContainsString( 'Block content', $result );
+		$this->assertStringNotContainsString( '[onshow;block=begin', $result );
+		$this->assertStringNotContainsString( '[onshow;block=end]', $result );
+		$this->assertStringContainsString( 'Before', $result );
+		$this->assertStringContainsString( 'After', $result );
+	}
+
+	/**
+	 * It should remove visibility block when referenced array field is empty.
+	 */
+	public function test_process_visibility_blocks_removes_content_with_empty_array() {
+		$content = 'Before [onshow;block=begin;bloc=items]Block content[onshow;block=end] After';
+		$fields  = array( 'items' => array() );
+
+		$result = $this->call_process_visibility_blocks( $content, $fields );
+
+		$this->assertStringNotContainsString( 'Block content', $result );
+		$this->assertStringNotContainsString( '[onshow;block=begin', $result );
+		$this->assertStringContainsString( 'Before', $result );
+		$this->assertStringContainsString( 'After', $result );
+	}
+
+	/**
+	 * It should keep visibility block content when referenced scalar field has value.
+	 */
+	public function test_process_visibility_blocks_keeps_content_with_scalar_value() {
+		$content = 'Before [onshow;block=begin;bloc=total]Total: [total][onshow;block=end] After';
+		$fields  = array( 'total' => '1000' );
+
+		$result = $this->call_process_visibility_blocks( $content, $fields );
+
+		$this->assertStringContainsString( 'Total: [total]', $result );
+		$this->assertStringNotContainsString( '[onshow;block=begin', $result );
+	}
+
+	/**
+	 * It should remove visibility block when referenced scalar field is empty.
+	 */
+	public function test_process_visibility_blocks_removes_content_with_empty_scalar() {
+		$content = 'Before [onshow;block=begin;bloc=total]Total: [total][onshow;block=end] After';
+		$fields  = array( 'total' => '' );
+
+		$result = $this->call_process_visibility_blocks( $content, $fields );
+
+		$this->assertStringNotContainsString( 'Total:', $result );
+		$this->assertStringContainsString( 'Before', $result );
+		$this->assertStringContainsString( 'After', $result );
+	}
+
+	/**
+	 * It should remove visibility block when referenced field does not exist.
+	 */
+	public function test_process_visibility_blocks_removes_content_with_missing_field() {
+		$content = 'Before [onshow;block=begin;bloc=missing]Block content[onshow;block=end] After';
+		$fields  = array( 'other' => 'value' );
+
+		$result = $this->call_process_visibility_blocks( $content, $fields );
+
+		$this->assertStringNotContainsString( 'Block content', $result );
+		$this->assertStringContainsString( 'Before', $result );
+		$this->assertStringContainsString( 'After', $result );
+	}
+
+	/**
+	 * Helper to call private process_visibility_blocks method.
+	 *
+	 * @param string $content Template content.
+	 * @param array  $fields  Merge fields.
+	 * @return string Processed content.
+	 */
+	private function call_process_visibility_blocks( $content, $fields ) {
+		$reflection = new ReflectionClass( 'Documentate_OpenTBS' );
+		$method     = $reflection->getMethod( 'process_visibility_blocks' );
+		$method->setAccessible( true );
+		return $method->invoke( null, $content, $fields );
+	}
 }

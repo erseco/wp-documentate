@@ -283,4 +283,38 @@ class SchemaExtractorTest extends WP_UnitTestCase {
 		$this->assertArrayHasKey( 'fecha', $gastos_entry['item_schema'], 'fecha must be in item_schema.' );
 		$this->assertArrayHasKey( 'importe', $gastos_entry['item_schema'], 'importe must be in item_schema.' );
 	}
+
+	/**
+	 * Test that visibility blocks (onshow) are not treated as repeaters.
+	 */
+	public function test_visibility_blocks_not_treated_as_repeaters() {
+		$extractor = new SchemaExtractor();
+		$schema    = $extractor->extract( dirname( __FILE__, 4 ) . '/fixtures/propuestagasto.odt' );
+
+		$this->assertNotWPError( $schema );
+
+		// Check that no 'onshow' repeater exists.
+		$repeater_names = array_column( $schema['repeaters'], 'name' );
+		$this->assertNotContains( 'onshow', $repeater_names, 'onshow should NOT be a repeater (it is a visibility directive).' );
+
+		// Check that g_libramientos repeater exists with its fields.
+		$g_libramientos = null;
+		foreach ( $schema['repeaters'] as $repeater ) {
+			if ( 'g_libramientos' === $repeater['name'] ) {
+				$g_libramientos = $repeater;
+				break;
+			}
+		}
+
+		$this->assertNotNull( $g_libramientos, 'g_libramientos repeater must exist.' );
+
+		$field_names = array_column( $g_libramientos['fields'], 'name' );
+		$this->assertContains( 'centro', $field_names, 'g_libramientos must have centro field.' );
+		$this->assertContains( 'finalidad', $field_names, 'g_libramientos must have finalidad field.' );
+		$this->assertContains( 'importe', $field_names, 'g_libramientos must have importe field.' );
+
+		// Check that libramientos_total is a standalone root field.
+		$root_field_names = array_column( $schema['fields'], 'name' );
+		$this->assertContains( 'libramientos_total', $root_field_names, 'libramientos_total should be a standalone root field.' );
+	}
 }

@@ -18,6 +18,20 @@ class SchemaExtractor {
 	const SCHEMA_VERSION = 2;
 
 	/**
+	 * TinyButStrong/OpenTBS visibility directive names.
+	 * These should NOT be treated as data repeaters.
+	 *
+	 * @var array<int, string>
+	 */
+	const VISIBILITY_DIRECTIVES = array(
+		'onshow',
+		'ondata',
+		'onload',
+		'onformat',
+		'onsection',
+	);
+
+	/**
 	 * Default validation patterns by field type.
 	 *
 	 * @var array<string, array{pattern: string, message: string}>
@@ -395,9 +409,10 @@ class SchemaExtractor {
 	 * @return array|WP_Error
 	 */
 	private function build_schema( $placeholders, $template_type, $template_path ) {
-		$fields    = array();
-		$repeaters = array();
-		$stack     = array();
+		$fields           = array();
+		$repeaters        = array();
+		$stack            = array();
+		$visibility_stack = array();
 
 		// First pass: identify repeaters from tbs:row or tbs:cell block patterns.
 		$tbs_repeaters       = $this->detect_tbs_repeaters( $placeholders );
@@ -408,13 +423,31 @@ class SchemaExtractor {
 			$block_mode = isset( $parameters['block'] ) ? strtolower( (string) $parameters['block'] ) : '';
 
 			if ( 'begin' === $block_mode ) {
+				$token_name = isset( $token['name'] ) ? strtolower( (string) $token['name'] ) : '';
+
+				// Check if this is a visibility directive (not a data repeater).
+				if ( in_array( $token_name, self::VISIBILITY_DIRECTIVES, true ) ) {
+					// Track visibility block for proper end matching, but don't create repeater.
+					$visibility_stack[] = $token_name;
+					continue;
+				}
+
+				// Regular data repeater.
 				$repeaters[] = $this->build_repeater_entry( $token );
 				$stack[]     = count( $repeaters ) - 1;
 				continue;
 			}
 
 			if ( 'end' === $block_mode ) {
-				array_pop( $stack );
+				$token_name = isset( $token['name'] ) ? strtolower( (string) $token['name'] ) : '';
+
+				// Check if ending a visibility block by name.
+				if ( in_array( $token_name, self::VISIBILITY_DIRECTIVES, true ) && ! empty( $visibility_stack ) ) {
+					array_pop( $visibility_stack );
+				} elseif ( ! empty( $stack ) ) {
+					// Ending a data repeater.
+					array_pop( $stack );
+				}
 				continue;
 			}
 

@@ -1054,7 +1054,7 @@ function documentate_get_propuesta_gasto_demo() {
 						array(
 							'concepto'     => 'Curso presencial metodologías activas (20h)',
 							'cantidad'     => '2',
-							'unitario'	   => '2',
+							'unitario'     => '2',
 							'sinimpuestos' => '3000',
 							'igic'         => '7',
 							'irpf'         => '0',
@@ -1063,7 +1063,7 @@ function documentate_get_propuesta_gasto_demo() {
 						array(
 							'concepto'     => 'Taller competencia digital docente (10h)',
 							'cantidad'     => '3',
-							'unitario'	   => '2',
+							'unitario'     => '2',
 							'sinimpuestos' => '4500',
 							'igic'         => '7',
 							'irpf'         => '0',
